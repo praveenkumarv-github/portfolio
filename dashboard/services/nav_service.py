@@ -1,218 +1,319 @@
 """
-NAV and Price Service
-Fetches NAV for mutual funds and metal prices with fallback support
+NAV Service
+===========
+Fetches Mutual Fund NAV from AMFI (Association of Mutual Funds in India).
+
+Primary source: https://www.amfiindia.com/spages/NAVAll.txt
+  - Tab/semicolon-delimited flat file updated daily.
+  - Fields: SchemeCode;ISIN1;ISIN2;SchemeName;NAV;Date
+
+Matching priority: ISIN (col 1 or 2) > Scheme Code (col 0)
+
+Fallback: MFAPI (https://api.mfapi.in/mf/{code}) for any AMFI miss.
+
+Guarantees:
+  * get_nav() logs matched scheme name + NAV for audit.
+  * Cache is per-identifier, 24-hour TTL.
+  * Returns (float, source_str) — never None for price in happy path.
+  * When NAV cannot be determined, returns (0.0, error_string).
 """
-import requests
-from typing import Dict, Optional, Tuple
-from datetime import datetime, timedelta
+
 import json
+import logging
 import os
+import re
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+# Paths
+_SERVICE_DIR  = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_SERVICE_DIR, "..", ".."))
+_CACHE_DIR    = os.path.join(_PROJECT_ROOT, "cache")
+_NAV_CACHE    = os.path.join(_CACHE_DIR, "nav_cache.json")
+
+_AMFI_URL     = "https://www.amfiindia.com/spages/NAVAll.txt"
+_MFAPI_URL    = "https://api.mfapi.in/mf/{}"
+_CACHE_TTL_H  = 24   # hours
+
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; FinanceDashboard/1.0)",
+}
 
 
-class NAVService:
-    """Service to fetch NAV and metal prices with caching and fallback"""
-    
-    # Cache file paths
-    CACHE_DIR = 'cache'
-    NAV_CACHE_FILE = os.path.join(CACHE_DIR, 'nav_cache.json')
-    METAL_CACHE_FILE = os.path.join(CACHE_DIR, 'metal_cache.json')
-    
-    # Cache expiry (24 hours)
-    CACHE_EXPIRY_HOURS = 24
-    
-    def __init__(self):
-        """Initialize NAV service and ensure cache directory exists"""
-        os.makedirs(self.CACHE_DIR, exist_ok=True)
-        self.nav_cache = self._load_cache(self.NAV_CACHE_FILE)
-        self.metal_cache = self._load_cache(self.METAL_CACHE_FILE)
-    
-    def _load_cache(self, file_path: str) -> Dict:
-        """Load cache from file"""
+# =============================================================================
+# CACHE
+# =============================================================================
+
+def _now_iso() -> str:
+    return datetime.now().isoformat()
+
+
+def _read_cache() -> Dict:
+    try:
+        if os.path.exists(_NAV_CACHE):
+            with open(_NAV_CACHE, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                return data
+    except Exception as exc:
+        logger.warning("[NAVService] cache read error: %s", exc)
+    return {}
+
+
+def _write_cache(data: Dict) -> None:
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        tmp = _NAV_CACHE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+        os.replace(tmp, _NAV_CACHE)
+    except Exception as exc:
+        logger.warning("[NAVService] cache write error: %s", exc)
+
+
+def _cache_valid(entry: Dict) -> bool:
+    """Return True if entry was stored within the last TTL hours."""
+    ts = entry.get("timestamp")
+    if not ts:
+        return False
+    try:
+        age = datetime.now() - datetime.fromisoformat(ts)
+        return age < timedelta(hours=_CACHE_TTL_H)
+    except Exception:
+        return False
+
+
+# =============================================================================
+# VALIDATION
+# =============================================================================
+
+def _validate_nav(nav: float) -> bool:
+    """NAV must be positive and below 10 000."""
+    ok = 0 < nav < 10_000
+    if not ok:
+        logger.warning("[NAVService] NAV %.4f failed validation (must be 0 < nav < 10000)", nav)
+    return ok
+
+
+# =============================================================================
+# AMFI NAVAll.txt PARSER
+# =============================================================================
+
+def _parse_amfi_text(text: str) -> Dict[str, Dict]:
+    """
+    Parse NAVAll.txt into a lookup dict keyed by both ISINs and Scheme Code.
+
+    File format (semicolon-separated):
+      SchemeCode;ISINDivPayout;ISINDivReinvest;SchemeName;NAV;Date
+
+    Returns:
+      {
+        "<ISIN_or_code>": {
+          "scheme_code": str,
+          "scheme_name": str,
+          "nav":         float,
+          "date":        str,
+        },
+        ...
+      }
+    """
+    index: Dict[str, Dict] = {}
+
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("Scheme") or ";" not in line:
+            continue
+        parts = line.split(";")
+        if len(parts) < 6:
+            continue
+        scheme_code = parts[0].strip()
+        isin1       = parts[1].strip()
+        isin2       = parts[2].strip()
+        scheme_name = parts[3].strip()
+        nav_raw     = parts[4].strip()
+        nav_date    = parts[5].strip()
+
         try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return {}
-    
-    def _save_cache(self, file_path: str, data: Dict):
-        """Save cache to file"""
-        try:
-            with open(file_path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception:
-            pass
-    
-    def _is_cache_valid(self, cached_data: Dict) -> bool:
-        """Check if cached data is still valid"""
-        if not cached_data or 'timestamp' not in cached_data:
-            return False
-        
-        cached_time = datetime.fromisoformat(cached_data['timestamp'])
-        age = datetime.now() - cached_time
-        return age.total_seconds() < (self.CACHE_EXPIRY_HOURS * 3600)
-    
+            nav = float(nav_raw)
+        except ValueError:
+            continue
+
+        if not _validate_nav(nav):
+            continue
+
+        record = {
+            "scheme_code": scheme_code,
+            "scheme_name": scheme_name,
+            "nav":         nav,
+            "date":        nav_date,
+        }
+
+        for key in [isin1, isin2, scheme_code]:
+            if key and key not in ("-", "N/A", ""):
+                index[key.upper()] = record
+
+    logger.info("[NAVService] parsed %d NAV records from AMFI text", len(index))
+    return index
+
+
+def _fetch_amfi_index() -> Optional[Dict[str, Dict]]:
+    """Download NAVAll.txt and return parsed index, or None on failure."""
+    try:
+        import requests as req
+        resp = req.get(_AMFI_URL, headers=_HEADERS, timeout=15)
+        resp.raise_for_status()
+        # AMFI file is latin-1 encoded
+        text = resp.content.decode("latin-1")
+        idx  = _parse_amfi_text(text)
+        if idx:
+            return idx
+        logger.warning("[NAVService] AMFI response parsed but yielded 0 records")
+    except Exception as exc:
+        logger.warning("[NAVService] AMFI fetch failed: %s", exc)
+    return None
+
+
+# =============================================================================
+# MFAPI FALLBACK
+# =============================================================================
+
+def _fetch_mfapi(code: str) -> Optional[Tuple[float, str, str]]:
+    """
+    Fallback: fetch NAV from MFAPI using numeric scheme code.
+    Returns (nav, date, scheme_name) or None.
+    """
+    # Only attempt with numeric codes
+    if not re.fullmatch(r"\d+", code.strip()):
+        return None
+    try:
+        import requests as req
+        resp = req.get(_MFAPI_URL.format(code.strip()), headers=_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        records = data.get("data", [])
+        if not records:
+            return None
+        latest    = records[0]
+        nav       = float(latest["nav"])
+        nav_date  = latest["date"]
+        name      = data.get("meta", {}).get("scheme_name", "unknown")
+        if _validate_nav(nav):
+            return nav, nav_date, name
+    except Exception as exc:
+        logger.warning("[NAVService] MFAPI failed for %s: %s", code, exc)
+    return None
+
+
+# =============================================================================
+# PUBLIC API
+# =============================================================================
+
+_amfi_index: Optional[Dict[str, Dict]] = None
+_amfi_loaded_at: Optional[datetime] = None
+
+
+def _get_amfi_index(force: bool = False) -> Optional[Dict[str, Dict]]:
+    """Return in-memory AMFI index, refreshing if stale (>= 24 h)."""
+    global _amfi_index, _amfi_loaded_at
+    now = datetime.now()
+    stale = (
+        _amfi_index is None
+        or _amfi_loaded_at is None
+        or (now - _amfi_loaded_at) >= timedelta(hours=_CACHE_TTL_H)
+        or force
+    )
+    if stale:
+        fetched = _fetch_amfi_index()
+        if fetched:
+            _amfi_index    = fetched
+            _amfi_loaded_at = now
+    return _amfi_index
+
+
+def get_nav(identifier: str, fund_name: str = "") -> Tuple[float, str]:
+    """
+    Return (nav, source_label) for the given fund identifier.
+
+    Identifier may be:
+      * ISIN (INF-prefixed 12-char string)
+      * AMFI numeric scheme code
+
+    Matching is done against AMFI NAVAll.txt.
+    Falls back to MFAPI (numeric codes only), then persisted cache.
+
+    Audit logging: logs matched scheme name and NAV on every successful lookup.
+
+    Returns (0.0, error_string) when no price can be determined.
+    """
+    key = identifier.strip().upper()
+    cache = _read_cache()
+
+    # Layer 1: valid cache entry
+    if key in cache:
+        entry = cache[key]
+        if _cache_valid(entry):
+            nav = float(entry["nav"])
+            logger.info(
+                "[NAVService][cache] %s -> %s NAV=%.4f date=%s",
+                key, entry.get("scheme_name", "?"), nav, entry.get("date", "?"),
+            )
+            return nav, f"Cached ({entry.get('date', '?')})"
+
+    # Layer 2: AMFI index lookup
+    amfi = _get_amfi_index()
+    if amfi and key in amfi:
+        rec  = amfi[key]
+        nav  = rec["nav"]
+        logger.info(
+            "[NAVService][AMFI] %s -> %s NAV=%.4f date=%s",
+            key, rec["scheme_name"], nav, rec["date"],
+        )
+        cache[key] = {"nav": nav, "date": rec["date"],
+                      "scheme_name": rec["scheme_name"], "timestamp": _now_iso()}
+        _write_cache(cache)
+        return nav, f"AMFI ({rec['date']})"
+
+    # Layer 3: MFAPI fallback
+    mf = _fetch_mfapi(key)
+    if mf:
+        nav, nav_date, name = mf
+        logger.info(
+            "[NAVService][MFAPI] %s -> %s NAV=%.4f date=%s",
+            key, name, nav, nav_date,
+        )
+        cache[key] = {"nav": nav, "date": nav_date, "scheme_name": name, "timestamp": _now_iso()}
+        _write_cache(cache)
+        return nav, f"MFAPI ({nav_date})"
+
+    # Layer 4: stale cache
+    if key in cache:
+        entry = cache[key]
+        nav   = float(entry.get("nav", 0))
+        if nav > 0:
+            logger.warning(
+                "[NAVService][stale] %s NAV=%.4f from %s",
+                key, nav, entry.get("date", "?"),
+            )
+            return nav, f"Cached-offline ({entry.get('date', '?')})"
+
+    logger.error("[NAVService] no NAV found for identifier=%s fund=%s", key, fund_name)
+    return 0.0, "Not Available"
+
+
+def get_nav_service():
+    """
+    Compatibility shim for existing excel_parser.py usage.
+    Returns a thin adapter so existing call-sites work unchanged.
+    """
+    return _NAVServiceAdapter()
+
+
+class _NAVServiceAdapter:
+    """Adapter that exposes the old NAVService.get_nav() interface."""
+
     def get_nav(self, identifier: str, fund_name: str = "") -> Tuple[Optional[float], str]:
-        """
-        Get NAV for a mutual fund by ISIN, AMFI code, or scheme code
-        Returns: (nav_value, source)
-        """
-        # Check cache first
-        cache_key = identifier.strip().upper()
-        if cache_key in self.nav_cache:
-            cached = self.nav_cache[cache_key]
-            if self._is_cache_valid(cached):
-                return cached.get('nav'), f"Cached ({cached.get('date', 'N/A')})"
-        
-        # Try to fetch from MFAPI (India mutual fund API)
-        nav, source = self._fetch_nav_from_mfapi(identifier)
-        
-        if nav:
-            # Cache the result
-            self.nav_cache[cache_key] = {
-                'nav': nav,
-                'date': datetime.now().strftime('%Y-%m-%d'),
-                'timestamp': datetime.now().isoformat(),
-                'fund_name': fund_name,
-            }
-            self._save_cache(self.NAV_CACHE_FILE, self.nav_cache)
-            return nav, source
-        
-        # Fallback to cached value even if expired
-        if cache_key in self.nav_cache:
-            cached = self.nav_cache[cache_key]
-            return cached.get('nav'), f"Cached (Offline - {cached.get('date', 'N/A')})"
-        
-        return None, "Not Available"
-    
-    def _fetch_nav_from_mfapi(self, identifier: str) -> Tuple[Optional[float], str]:
-        """
-        Fetch NAV from MFAPI (free India mutual fund API)
-        Supports AMFI codes
-        """
-        try:
-            # MFAPI uses AMFI code in URL
-            # Format: https://api.mfapi.in/mf/{amfi_code}
-            
-            # Clean identifier
-            amfi_code = identifier.strip()
-            
-            # Try to extract numeric code if it's ISIN
-            if len(amfi_code) == 12 and amfi_code.startswith('INF'):
-                # ISIN format - we can't directly convert, return None
-                # User should provide AMFI code
-                return None, "ISIN not supported, use AMFI code"
-            
-            # Make API request
-            url = f"https://api.mfapi.in/mf/{amfi_code}"
-            response = requests.get(url, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if 'data' in data and len(data['data']) > 0:
-                    latest = data['data'][0]
-                    nav = float(latest['nav'])
-                    date = latest['date']
-                    return nav, f"MFAPI ({date})"
-        except requests.Timeout:
-            return None, "API Timeout"
-        except requests.RequestException:
-            return None, "API Error"
-        except (ValueError, KeyError):
-            return None, "Invalid Response"
-        except Exception as e:
-            return None, f"Error: {str(e)}"
-        
-        return None, "Not Found"
-    
-    def get_metal_prices(self) -> Dict[str, Tuple[Optional[float], str]]:
-        """
-        Get current metal prices (Gold and Silver) per gram in INR
-        Returns: {'gold': (price, source), 'silver': (price, source)}
-        """
-        results = {}
-        
-        # Check cache
-        for metal in ['gold', 'silver']:
-            if metal in self.metal_cache and self._is_cache_valid(self.metal_cache[metal]):
-                cached = self.metal_cache[metal]
-                results[metal] = (cached.get('price'), f"Cached ({cached.get('date', 'N/A')})")
-                continue
-            
-            # Try to fetch live prices
-            price, source = self._fetch_metal_price(metal)
-            
-            if price:
-                # Cache the result
-                self.metal_cache[metal] = {
-                    'price': price,
-                    'date': datetime.now().strftime('%Y-%m-%d'),
-                    'timestamp': datetime.now().isoformat(),
-                }
-                self._save_cache(self.METAL_CACHE_FILE, self.metal_cache)
-                results[metal] = (price, source)
-            else:
-                # Fallback to cached even if expired
-                if metal in self.metal_cache:
-                    cached = self.metal_cache[metal]
-                    results[metal] = (cached.get('price'), f"Cached (Offline - {cached.get('date', 'N/A')})")
-                else:
-                    results[metal] = (None, "Not Available")
-        
-        return results
-    
-    def _fetch_metal_price(self, metal: str) -> Tuple[Optional[float], str]:
-        """
-        Fetch current metal price per gram in INR
-        Note: This is a placeholder - real implementation would use actual API
-        For now, returns None to trigger manual input
-        """
-        # Real implementation would use:
-        # - GoodReturns API
-        # - BankBazaar API
-        # - Or scrape from reliable source
-        
-        # For now, return None to allow manual input
-        return None, "Manual Input Required"
-    
-    def set_manual_nav(self, identifier: str, nav: float, fund_name: str = ""):
-        """Manually set NAV for a fund (useful when offline)"""
-        cache_key = identifier.strip().upper()
-        self.nav_cache[cache_key] = {
-            'nav': nav,
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'timestamp': datetime.now().isoformat(),
-            'fund_name': fund_name,
-            'manual': True,
-        }
-        self._save_cache(self.NAV_CACHE_FILE, self.nav_cache)
-    
-    def set_manual_metal_price(self, metal: str, price: float):
-        """Manually set metal price (useful when offline)"""
-        self.metal_cache[metal.lower()] = {
-            'price': price,
-            'date': datetime.now().strftime('%Y-%m-%d'),
-            'timestamp': datetime.now().isoformat(),
-            'manual': True,
-        }
-        self._save_cache(self.METAL_CACHE_FILE, self.metal_cache)
-    
-    def clear_cache(self):
-        """Clear all cached data"""
-        self.nav_cache = {}
-        self.metal_cache = {}
-        self._save_cache(self.NAV_CACHE_FILE, {})
-        self._save_cache(self.METAL_CACHE_FILE, {})
-
-
-# Singleton instance
-_nav_service = None
-
-
-def get_nav_service() -> NAVService:
-    """Get or create NAV service singleton"""
-    global _nav_service
-    if _nav_service is None:
-        _nav_service = NAVService()
-    return _nav_service
+        nav, src = get_nav(identifier, fund_name)
+        return (nav if nav > 0 else None), src

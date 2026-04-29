@@ -1,0 +1,14 @@
+{
+  "silver": {
+    "price": 150.0,
+    "timestamp": "2026-04-29",
+    "source": "Manual",
+    "manual": true
+  },
+  "gold": {
+    "price": 15219.0,
+    "timestamp": "2026-04-30",
+    "source": "live",
+    "manual": false
+  }
+}

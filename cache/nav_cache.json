@@ -1,0 +1,32 @@
+{
+  "120503": {
+    "nav": 105.6212,
+    "date": "2026-04-29",
+    "timestamp": "2026-04-29T23:32:09.081438",
+    "fund_name": "HDFC Top 100 Fund"
+  },
+  "120518": {
+    "nav": 285.87,
+    "date": "2026-04-29",
+    "timestamp": "2026-04-29T23:32:09.752730",
+    "fund_name": "SBI Blue Chip Fund"
+  },
+  "120586": {
+    "nav": 117.92,
+    "date": "2026-04-29",
+    "timestamp": "2026-04-29T23:32:10.442269",
+    "fund_name": "ICICI Prudential Technology Fund"
+  },
+  "120505": {
+    "nav": 135.12,
+    "date": "2026-04-29",
+    "timestamp": "2026-04-29T23:32:11.059337",
+    "fund_name": "Axis Mid Cap Fund"
+  },
+  "118989": {
+    "nav": 220.217,
+    "date": "2026-04-29",
+    "timestamp": "2026-04-29T23:32:11.563422",
+    "fund_name": "Nippon India Small Cap Fund"
+  }
+}

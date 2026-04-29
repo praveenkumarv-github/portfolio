@@ -5,6 +5,7 @@ Handles all Excel file parsing and data validation logic
 import pandas as pd
 from typing import Dict, Any, List
 from .nav_service import get_nav_service
+from .metal_price_service import get_metal_price
 
 
 class ExcelParserError(Exception):
@@ -53,18 +54,27 @@ class ExcelParser:
             
             # Calculate aggregates
             self._calculate_metrics()
-            
+
             return {
                 'success': True,
                 'data': self.data,
                 'errors': self.errors,
                 'warnings': self.warnings,
             }
-            
+
         except FileNotFoundError:
             raise ExcelParserError(f"File not found: {self.file_path}")
+        except ExcelParserError:
+            raise
         except Exception as e:
             raise ExcelParserError(f"Error loading file: {str(e)}")
+        finally:
+            # Explicitly close so Windows can release the file handle
+            if self.excel_file is not None:
+                try:
+                    self.excel_file.close()
+                except Exception:
+                    pass
     
     def _parse_mutual_funds(self):
         """Parse MutualFunds sheet with Units + Identifier"""
@@ -314,9 +324,6 @@ class ExcelParser:
         df = df.dropna(subset=['Type'])
         df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').fillna(0)
         
-        # Fetch metal prices
-        metal_prices = self.nav_service.get_metal_prices()
-        
         metals = []
         total_value = 0
         
@@ -324,13 +331,8 @@ class ExcelParser:
             metal_type = str(row['Type']).lower()
             quantity = float(row['Quantity'])
             
-            # Get price for this metal
-            price_info = metal_prices.get(metal_type, (None, "Not Available"))
-            price, price_source = price_info
-            
-            if price is None:
-                price = 0
-                self.warnings.append(f"Price not available for {metal_type} - manual input required")
+            # Layer-aware price resolution — NEVER returns None
+            price, price_source = get_metal_price(metal_type)
             
             value = quantity * price
             total_value += value
