@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Cockpit</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0e27;
+            color: #e0e0e0;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1f3a 0%, #2d3561 100%);
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        header h1 {
+            font-size: 22px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-upload-section {
+            background: #141a2e;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #2a3555;
+        }
+
+        .file-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .upload-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #357abd;
+        }
+
+        .btn-reload {
+            background: #27ae60;
+        }
+
+        .btn-reload:hover {
+            background: #229954;
+        }
+
+        input[type="file"] {
+            padding: 6px;
+            border: 1px solid #2a3555;
+            border-radius: 4px;
+            background: #1a1f3a;
+            color: #e0e0e0;
+            font-size: 12px;
+        }
+
+        .messages {
+            margin-bottom: 15px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .message.success {
+            background: #1e4620;
+            color: #4caf50;
+            border: 1px solid #2e7d32;
+        }
+
+        .message.error {
+            background: #4a1f1f;
+            color: #f44336;
+            border: 1px solid #d32f2f;
+        }
+
+        .message.warning {
+            background: #4a3d1f;
+            color: #ff9800;
+            border: 1px solid #f57c00;
+        }
+
+        .message.info {
+            background: #1f2e4a;
+            color: #2196f3;
+            border: 1px solid #1976d2;
+        }
+
+        /* SUMMARY TABLE - High Density */
+        .summary-section {
+            background: #141a2e;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #2a3555;
+        }
+
+        .summary-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #4a90e2;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .summary-table thead {
+            background: #1a1f3a;
+        }
+
+        .summary-table th {
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #4a90e2;
+            border-bottom: 2px solid #2a3555;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #1a1f3a;
+        }
+
+        .summary-table tbody tr:hover {
+            background: #1a1f3a;
+        }
+
+        .summary-table .category-total {
+            font-weight: 700;
+            background: #1a1f3a;
+            color: #4a90e2;
+        }
+
+        .summary-table .grand-total {
+            font-weight: 700;
+            background: #2a3555;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .currency {
+            font-family: 'Courier New', monospace;
+            text-align: right;
+        }
+
+        .positive {
+            color: #4caf50;
+        }
+
+        .negative {
+            color: #f44336;
+        }
+
+        /* Detail Sections */
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .detail-section {
+            background: #141a2e;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #2a3555;
+        }
+
+        .detail-section h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #4a90e2;
+            border-bottom: 1px solid #2a3555;
+            padding-bottom: 8px;
+        }
+
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .detail-table th {
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #4a90e2;
+            border-bottom: 1px solid #2a3555;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .detail-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #1a1f3a;
+        }
+
+        .detail-table tbody tr:hover {
+            background: #1a1f3a;
+        }
+
+        .chart-container {
+            background: #141a2e;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #2a3555;
+            height: 350px;
+        }
+
+        .chart-container h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #4a90e2;
+        }
+
+        .chart-canvas {
+            max-height: 280px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state h2 {
+            font-size: 24px;
+            margin-bottom: 15px;
+            color: #999;
+        }
+
+        .text-muted {
+            color: #7a8199;
+            font-size: 11px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #1e4620;
+            color: #4caf50;
+        }
+
+        .badge-warning {
+            background: #4a3d1f;
+            color: #ff9800;
+        }
+
+        .badge-info {
+            background: #1f2e4a;
+            color: #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>💰 FINANCIAL COCKPIT</h1>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Messages -->
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="message {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Errors and Warnings -->
+        {% if errors %}
+        <div class="messages">
+            {% for error in errors %}
+            <div class="message error">⚠️ {{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if warnings %}
+        <div class="messages">
+            {% for warning in warnings %}
+            <div class="message warning">⚠️ {{ warning }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- File Upload Section -->
+        <div class="file-upload-section">
+            <div class="file-info">
+                <div>
+                    {% if file_info %}
+                    <strong>Current File:</strong> {{ file_info.filename }} | <strong>Loaded:</strong> {{ file_info.uploaded_at|date:"M d, Y H:i" }}
+                    {% else %}
+                    <strong>No file loaded</strong>
+                    {% endif %}
+                </div>
+            </div>
+            <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" class="upload-form">
+                {% csrf_token %}
+                <input type="file" name="excel_file" accept=".xlsx" required>
+                <button type="submit" class="btn">Upload & Load</button>
+                {% if file_info %}
+                <button type="submit" class="btn btn-reload" onclick="event.preventDefault(); window.location.reload();">Reload</button>
+                {% endif %}
+            </form>
+        </div>
+
+        {% if data %}
+
+        {% if data %}
+
+        <!-- SUMMARY TABLE -->
+        <div class="summary-section">
+            <h2>📊 PORTFOLIO SUMMARY</h2>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Subtype</th>
+                        <th class="currency">Value (₹)</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Mutual Funds -->
+                    <tr class="category-total">
+                        <td><strong>Mutual Funds</strong></td>
+                        <td>{{ data.mutual_funds_summary.fund_count }} Funds</td>
+                        <td class="currency"><strong>{{ data.mutual_funds_summary.total_current_value|floatformat:0 }}</strong></td>
+                        <td>{{ data.mutual_funds_summary.total_units|floatformat:2 }} total units</td>
+                    </tr>
+
+                    <!-- Retirement -->
+                    {% for item in data.retirement %}
+                    <tr>
+                        <td>{% if forloop.first %}Retirement{% endif %}</td>
+                        <td>{{ item.type }}</td>
+                        <td class="currency">{{ item.amount|floatformat:0 }}</td>
+                        <td>-</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="category-total">
+                        <td><strong>Retirement Total</strong></td>
+                        <td>-</td>
+                        <td class="currency"><strong>{{ data.retirement_total|floatformat:0 }}</strong></td>
+                        <td>-</td>
+                    </tr>
+
+                    <!-- Liquid -->
+                    {% for item in data.liquid %}
+                    <tr>
+                        <td>{% if forloop.first %}Liquid{% endif %}</td>
+                        <td>{{ item.account_name }} ({{ item.type }})</td>
+                        <td class="currency">{{ item.amount|floatformat:0 }}</td>
+                        <td>-</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="category-total">
+                        <td><strong>Liquid Total</strong></td>
+                        <td>-</td>
+                        <td class="currency"><strong>{{ data.liquid_total|floatformat:0 }}</strong></td>
+                        <td>-</td>
+                    </tr>
+
+                    <!-- Emergency Fund -->
+                    {% for item in data.emergency_fund %}
+                    <tr>
+                        <td>{% if forloop.first %}Emergency Fund{% endif %}</td>
+                        <td>{{ item.account_name }} ({{ item.type }})</td>
+                        <td class="currency">{{ item.amount|floatformat:0 }}</td>
+                        <td>{% if item.maturity_date %}Mat: {{ item.maturity_date }}{% else %}-{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="category-total">
+                        <td><strong>Emergency Fund Total</strong></td>
+                        <td>-</td>
+                        <td class="currency"><strong>{{ data.emergency_fund_total|floatformat:0 }}</strong></td>
+                        <td>-</td>
+                    </tr>
+
+                    <!-- Insurance -->
+                    <tr class="category-total">
+                        <td><strong>Insurance</strong></td>
+                        <td>Coverage</td>
+                        <td class="currency"><strong>{{ data.insurance_summary.total_coverage|floatformat:0 }}</strong></td>
+                        <td>Premium: ₹{{ data.insurance_summary.total_premium|floatformat:0 }}/yr</td>
+                    </tr>
+
+                    <!-- Metals -->
+                    {% for item in data.metals %}
+                    <tr>
+                        <td>{% if forloop.first %}Metals{% endif %}</td>
+                        <td>{{ item.type }} ({{ item.quantity }}g)</td>
+                        <td class="currency">{{ item.value|floatformat:0 }}</td>
+                        <td><span class="text-muted">₹{{ item.price_per_gram|floatformat:0 }}/g</span> <span class="badge badge-info">{{ item.price_source }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="category-total">
+                        <td><strong>Metals Total</strong></td>
+                        <td>-</td>
+                        <td class="currency"><strong>{{ data.metals_total|floatformat:0 }}</strong></td>
+                        <td>-</td>
+                    </tr>
+
+                    <!-- Grand Total -->
+                    <tr class="grand-total">
+                        <td colspan="2"><strong>NET WORTH</strong></td>
+                        <td class="currency"><strong>₹ {{ data.global_metrics.total_net_worth|floatformat:0 }}</strong></td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ALLOCATION CHART -->
+        <div class="chart-container" style="margin-bottom: 20px;">
+            <h3>📈 Asset Allocation</h3>
+            <canvas id="assetAllocationChart" class="chart-canvas"></canvas>
+        </div>
+
+        <!-- DETAILED BREAKDOWN -->
+        <div class="detail-grid">
+            <!-- Mutual Funds Detail -->
+            <div class="detail-section">
+                <h3>📊 Mutual Funds Detail</h3>
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>Fund Name</th>
+                            <th>Units</th>
+                            <th>NAV</th>
+                            <th class="currency">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fund in data.mutual_funds %}
+                        <tr>
+                            <td>
+                                {{ fund.fund_name|truncatewords:4 }}
+                                <br><span class="text-muted">{{ fund.identifier }}</span>
+                            </td>
+                            <td>{{ fund.units|floatformat:2 }}</td>
+                            <td>
+                                ₹{{ fund.nav|floatformat:2 }}
+                                <br><span class="badge badge-info">{{ fund.nav_source }}</span>
+                            </td>
+                            <td class="currency">₹{{ fund.current_value|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Emergency Fund Detail -->
+            <div class="detail-section">
+                <h3>🚨 Emergency Fund Breakdown</h3>
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>Account</th>
+                            <th>Type</th>
+                            <th class="currency">Amount</th>
+                            <th>Maturity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data.emergency_fund %}
+                        <tr>
+                            <td>{{ item.account_name }}</td>
+                            <td>{{ item.type }}</td>
+                            <td class="currency">₹{{ item.amount|floatformat:0 }}</td>
+                            <td>{{ item.maturity_date|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% for type, total in data.emergency_fund_by_type.items %}
+                        <tr class="category-total">
+                            <td colspan="2"><strong>{{ type }} Total</strong></td>
+                            <td class="currency"><strong>₹{{ total|floatformat:0 }}</strong></td>
+                            <td>-</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Liquid Accounts Detail -->
+            <div class="detail-section">
+                <h3>💵 Liquid Accounts</h3>
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>Account Name</th>
+                            <th>Type</th>
+                            <th class="currency">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data.liquid %}
+                        <tr>
+                            <td>{{ item.account_name }}</td>
+                            <td>{{ item.type }}</td>
+                            <td class="currency">₹{{ item.amount|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Insurance Detail -->
+            <div class="detail-section">
+                <h3>🛡️ Insurance Policies</h3>
+                <table class="detail-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Provider</th>
+                            <th class="currency">Premium</th>
+                            <th class="currency">Coverage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in data.insurance %}
+                        <tr>
+                            <td>{{ item.type }}</td>
+                            <td>{{ item.provider }}</td>
+                            <td class="currency">₹{{ item.premium|floatformat:0 }}</td>
+                            <td class="currency">₹{{ item.coverage|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Chart.js Scripts -->
+        <script>
+            // Asset Allocation Pie Chart
+            const assetCtx = document.getElementById('assetAllocationChart').getContext('2d');
+            const assetAllocationChart = new Chart(assetCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Mutual Funds', 'Retirement', 'Liquid', 'Emergency Fund', 'Metals'],
+                    datasets: [{
+                        data: [
+                            {{ data.mutual_funds_summary.total_current_value }},
+                            {{ data.retirement_total }},
+                            {{ data.liquid_total }},
+                            {{ data.emergency_fund_total }},
+                            {{ data.metals_total }}
+                        ],
+                        backgroundColor: [
+                            '#4a90e2',
+                            '#9b59b6',
+                            '#2ecc71',
+                            '#e74c3c',
+                            '#f39c12'
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#0a0e27'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                color: '#e0e0e0',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    label += '₹' + context.parsed.toLocaleString('en-IN');
+                                    let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    let percentage = ((context.parsed / total) * 100).toFixed(1);
+                                    label += ' (' + percentage + '%)';
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        </script>
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <h2>📂 No Data Available</h2>
+            <p>Please upload an Excel file to view your financial cockpit.</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
