@@ -17,8 +17,9 @@ body{font-family:'Segoe UI',-apple-system,sans-serif;background:var(--bg);color:
 .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;color:var(--txt)}
 .btn:hover{background:#f8f9fd}
 .btn-pr{background:var(--accent);border-color:var(--accent);color:#fff}
-input[type=file],input[type=number]{border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:11px;background:#fff}
+input[type=file],input[type=number],input[type=url]{border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:11px;background:#fff}
 input[type=file]{max-width:192px} input[type=number]{width:96px}
+input[type=url]{width:320px;max-width:100%}
 
 .notices{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .msg{padding:7px 10px;border:1px solid;border-radius:8px;font-size:11px}
@@ -86,11 +87,12 @@ input[type=file]{max-width:192px} input[type=number]{width:96px}
   <div class="topbar">
     <div>
       <div class="brand">Personal Finance Cockpit</div>
-      {% if file_info %}<div class="meta">{{ file_info.filename }} | {{ file_info.uploaded_at|date:"d M Y H:i" }}</div>{% endif %}
+      {% if file_info %}<div class="meta">Source: {{ file_info.source }} | Last loaded: {{ file_info.uploaded_at|date:"d M Y H:i" }}{% if file_info.source == 'Local File' %} | {{ file_info.filename }}{% endif %}</div>{% endif %}
     </div>
     <div class="actions">
       {% if file_info %}<a href="{% url 'update_metal_prices' %}?refresh=1" class="btn">Refresh Prices</a>{% endif %}
-      <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="file" name="excel_file" accept=".xlsx" required><button type="submit" class="btn btn-pr">Load File</button></form>
+      <form method="post" action="{% url 'load_google_sheet' %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="url" name="sheet_url" placeholder="Paste Google Sheet URL" required><button type="submit" class="btn btn-pr">Load from Google Sheet</button></form>
+      <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="file" name="excel_file" accept=".xlsx" required><button type="submit" class="btn">Upload Excel</button></form>
     </div>
   </div>
 
@@ -155,7 +157,7 @@ input[type=file]{max-width:192px} input[type=number]{width:96px}
 
     <div class="blade" id="blade-risk"><div class="blade-head" onclick="toggleBlade('blade-risk')"><span>RM</span><span class="blade-name">Risk Management</span><span class="blade-val">₹{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span><span class="chev" id="chev-blade-risk">▼</span></div><div class="blade-body" id="body-blade-risk"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Coverage Mix</div><div class="blade-chart"><canvas id="riskBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Coverage</th><th class="r">Premium</th><th class="r">Status</th></tr></thead><tbody>{% for x in portfolio.risk_rows %}<tr><td>{{ x.type }}</td><td class="r">₹{{ x.coverage|floatformat:0 }}</td><td class="r">₹{{ x.premium|floatformat:0 }}</td><td class="r"><span class="badge {{ x.status_level }}">{{ x.status }}</span></td></tr>{% endfor %}</tbody></table></div></div></div></div>
   </section>
-  {% else %}<div class="empty">No data loaded. Upload an Excel file to render the cockpit.</div>{% endif %}
+  {% else %}<div class="empty">No data loaded. Load from Google Sheet or upload an Excel file to render the cockpit.</div>{% endif %}
 </div>
 
 <script>

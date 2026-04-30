@@ -10,6 +10,12 @@ from django.core.files.storage import FileSystemStorage
 from django.shortcuts import redirect, render
 
 from .models import FileUploadHistory
+from .services.google_sheet_service import (
+    GoogleSheetAccessError,
+    GoogleSheetError,
+    InvalidGoogleSheetUrl,
+    fetch_google_sheet,
+)
 from .services.aggregator import build_dashboard_context, clear_dashboard_cache
 from .services.metal_price_service import (
     refresh_prices,
@@ -20,6 +26,19 @@ from .services.metal_price_service import (
 # ---------------------------------------------------------------------------
 # Views
 # ---------------------------------------------------------------------------
+
+
+def _is_google_temp_file(file_path: str) -> bool:
+    return os.path.basename(file_path).startswith("gsheet_") and file_path.lower().endswith(".xlsx")
+
+
+def _delete_previous_loaded_file() -> None:
+    old = FileUploadHistory.objects.first()
+    if old and os.path.exists(old.file_path):
+        try:
+            os.remove(old.file_path)
+        except OSError:
+            pass
 
 def dashboard_view(request):
     context = {
@@ -39,8 +58,10 @@ def dashboard_view(request):
     try:
         payload = build_dashboard_context(last_upload.file_path)
         context.update(payload)
+        source = "Google Sheet" if _is_google_temp_file(last_upload.file_path) else "Local File"
         context["file_info"] = {
             "filename": os.path.basename(last_upload.file_path),
+            "source": source,
             "uploaded_at": last_upload.uploaded_at,
         }
     except OSError as exc:
@@ -62,21 +83,44 @@ def upload_file(request):
 
     try:
         fs = FileSystemStorage(location=settings.MEDIA_ROOT)
-        old = FileUploadHistory.objects.first()
-        if old and os.path.exists(old.file_path):
-            try:
-                os.remove(old.file_path)
-            except OSError:
-                pass
+        _delete_previous_loaded_file()
 
         filename  = fs.save(excel_file.name, excel_file)
         file_path = os.path.join(settings.MEDIA_ROOT, filename)
         FileUploadHistory.objects.all().delete()
         FileUploadHistory.objects.create(file_path=file_path)
         clear_dashboard_cache()
-        messages.success(request, f'"{excel_file.name}" loaded successfully.')
+        messages.success(request, f'"{excel_file.name}" loaded successfully from Local File.')
     except Exception as exc:
         messages.error(request, f"Upload error: {exc}")
+
+    return redirect("dashboard")
+
+
+def load_google_sheet(request):
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    sheet_url = request.POST.get("sheet_url", "").strip()
+    if not sheet_url:
+        messages.error(request, "Invalid Google Sheet URL")
+        return redirect("dashboard")
+
+    try:
+        temp_file_path = fetch_google_sheet(sheet_url)
+        _delete_previous_loaded_file()
+        FileUploadHistory.objects.all().delete()
+        FileUploadHistory.objects.create(file_path=temp_file_path)
+        clear_dashboard_cache()
+        messages.success(request, "Google Sheet loaded successfully.")
+    except InvalidGoogleSheetUrl:
+        messages.error(request, "Invalid Google Sheet URL")
+    except GoogleSheetAccessError:
+        messages.error(request, "Sheet not publicly accessible")
+    except GoogleSheetError:
+        messages.error(request, "Failed to fetch data")
+    except Exception:
+        messages.error(request, "Failed to fetch data")
 
     return redirect("dashboard")
 
