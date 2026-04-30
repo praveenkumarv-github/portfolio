@@ -162,6 +162,7 @@ input[type=url]{width:320px;max-width:100%}
 
 <script>
 function toggleBlade(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(!b)return;var o=b.classList.contains('open');b.classList.toggle('open',!o);if(c){c.style.transform=o?'':'rotate(-90deg)';}}
+document.addEventListener('DOMContentLoaded',function(){['blade-mutual_funds','blade-risk'].forEach(function(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(b&&!b.classList.contains('open')){b.classList.add('open');if(c){c.style.transform='rotate(-90deg)';}}});});
 
 {% if portfolio %}
 function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN');}

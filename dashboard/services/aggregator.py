@@ -13,6 +13,7 @@ from ..models import NetWorthSnapshot
 from .alerts import run_alerts
 from .calculation_engine import build_portfolio
 from .excel_parser import ExcelParserError, parse_excel_file
+from .validators import validate_portfolio_data
 
 
 _PAYLOAD_CACHE: Dict[str, Any] = {
@@ -49,7 +50,18 @@ def _capture_snapshot(portfolio) -> None:
 
 
 def _build_payload(file_path: str) -> Dict[str, Any]:
-    result = parse_excel_file(file_path)
+    try:
+        result = parse_excel_file(file_path)
+    except ExcelParserError as exc:
+        return {
+            "portfolio": None,
+            "alerts": [],
+            "errors": [str(exc)],
+            "warnings": [],
+            "snapshots": [],
+            "raw_data": {},
+        }
+
     payload: Dict[str, Any] = {
         "portfolio": None,
         "alerts": [],
@@ -63,22 +75,37 @@ def _build_payload(file_path: str) -> Dict[str, Any]:
         return payload
 
     data = result["data"]
-    portfolio = build_portfolio(data)
-    payload["portfolio"] = portfolio
-    payload["alerts"] = run_alerts(data, portfolio)
+    payload["warnings"].extend(validate_portfolio_data(data))
 
-    _capture_snapshot(portfolio)
-    payload["snapshots"] = list(
-        NetWorthSnapshot.objects.values(
-            "month",
-            "total_net_worth",
-            "mutual_funds",
-            "retirement",
-            "liquid",
-            "emergency_fund",
-            "metals",
-        ).order_by("month")
-    )
+    try:
+        portfolio = build_portfolio(data)
+    except Exception as exc:  # never crash the UI
+        payload["errors"].append(f"Portfolio computation failed: {exc}")
+        return payload
+
+    payload["portfolio"] = portfolio
+
+    try:
+        payload["alerts"] = run_alerts(data, portfolio)
+    except Exception as exc:
+        payload["warnings"].append(f"Alerts engine failed: {exc}")
+
+    try:
+        _capture_snapshot(portfolio)
+        payload["snapshots"] = list(
+            NetWorthSnapshot.objects.values(
+                "month",
+                "total_net_worth",
+                "mutual_funds",
+                "retirement",
+                "liquid",
+                "emergency_fund",
+                "metals",
+            ).order_by("month")
+        )
+    except Exception as exc:
+        payload["warnings"].append(f"Snapshot capture failed: {exc}")
+
     return payload
 
 
