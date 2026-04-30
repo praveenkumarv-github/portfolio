@@ -1,790 +1,731 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Finance Cockpit</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Finance Cockpit</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d18;--surf:#111422;--card:#161929;--border:#1e2438;
+  --accent:#4f8ef7;--purple:#7c5cf6;--green:#2dd4a0;--red:#f06b6b;
+  --gold:#e8b44a;--silver:#90a8be;--orange:#f59e42;
+  --text:#dde3f0;--sub:#7a85a3;--label:#5a6380;--radius:8px;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+}
+html{font-size:13px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+a{text-decoration:none;color:inherit}
+input,button{font-family:inherit}
 
-        :root {
-            --bg:       #0d0f1a;
-            --surface:  #141825;
-            --card:     #1b1f30;
-            --border:   #252a40;
-            --accent:   #5b8dee;
-            --accent2:  #8b5cf6;
-            --gold:     #f5c842;
-            --silver:   #a8b8cc;
-            --green:    #34d399;
-            --red:      #f87171;
-            --text:     #e2e8f0;
-            --muted:    #64748b;
-            --label:    #94a3b8;
-            --radius:   10px;
-            --shadow:   0 4px 24px rgba(0,0,0,.45);
-        }
+/* TOPBAR */
+.topbar{background:var(--surf);border-bottom:1px solid var(--border);height:44px;padding:0 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:200;box-shadow:0 1px 12px rgba(0,0,0,.4)}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.topbar-logo{font-size:15px;font-weight:800;letter-spacing:.3px;
+  background:linear-gradient(90deg,#6ba3fb,#9d78f9);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.topbar-file{font-size:11px;color:var(--sub);padding:3px 8px;
+  background:var(--card);border:1px solid var(--border);border-radius:4px}
+.topbar-right{display:flex;align-items:center;gap:6px}
 
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            font-size: 13px;
-            line-height: 1.5;
-            min-height: 100vh;
-        }
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;
+  border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;
+  transition:filter .12s,transform .12s;letter-spacing:.2px;white-space:nowrap}
+.btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:var(--border);color:var(--sub)}
+.btn-ghost:hover{color:var(--text)}
+.btn-gold{background:linear-gradient(135deg,#b8740c,#e8b44a);color:#1a0f00}
+.btn-sm{padding:4px 9px;font-size:10px}
 
-        /* HEADER */
-        .header {
-            background: linear-gradient(135deg, #0f1420 0%, #161d32 60%, #1a1535 100%);
-            border-bottom: 1px solid var(--border);
-            padding: 14px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 20px rgba(0,0,0,.5);
-        }
-        .header-brand { display: flex; align-items: center; gap: 10px; }
-        .header-brand h1 {
-            font-size: 18px; font-weight: 700; letter-spacing: .5px;
-            background: linear-gradient(90deg, #7eb3f7, #a78bfa);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-        }
-        .header-actions { display: flex; align-items: center; gap: 8px; }
+/* LAYOUT */
+.page{max-width:1480px;margin:0 auto;padding:14px 20px 48px}
 
-        /* LAYOUT */
-        .page { max-width: 1540px; margin: 0 auto; padding: 20px 24px 40px; }
+/* TOAST */
+.toast-row{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.toast{padding:8px 12px;border-radius:5px;font-size:11px;border-left:3px solid;
+  display:flex;align-items:flex-start;gap:8px}
+.toast-success{background:#041c10;color:#4ade80;border-color:#16a34a}
+.toast-error  {background:#1e0909;color:#fca5a5;border-color:#dc2626}
+.toast-warning{background:#1a1300;color:#fcd34d;border-color:#ca8a04}
+.toast-info   {background:#08122a;color:#7eb4fb;border-color:var(--accent)}
 
-        /* BUTTONS */
-        .btn {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 7px 14px; border: none; border-radius: 6px;
-            font-size: 12px; font-weight: 600; cursor: pointer;
-            transition: all .15s ease; letter-spacing: .3px; text-decoration: none;
-        }
-        .btn-primary { background: var(--accent); color: #fff; }
-        .btn-primary:hover { background: #4a7fe0; transform: translateY(-1px); }
-        .btn-ghost { background: var(--border); color: var(--label); }
-        .btn-ghost:hover { background: #2e3450; color: var(--text); }
-        .btn-gold { background: linear-gradient(135deg,#c9910d,#f5c842); color: #1a1400; }
-        .btn-gold:hover { filter: brightness(1.1); transform: translateY(-1px); }
+/* ALERT STRIP */
+.alert-strip{background:rgba(248,183,74,.07);border:1px solid rgba(248,183,74,.2);
+  border-radius:6px;padding:7px 14px;margin-bottom:10px;font-size:11px;color:#fcd34d;
+  display:flex;align-items:center;gap:8px}
+.alert-strip.error{background:rgba(240,107,107,.07);border-color:rgba(240,107,107,.2);color:#fca5a5}
 
-        /* ALERTS */
-        .alert-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-        .alert { padding: 9px 14px; border-radius: 6px; font-size: 12px; border-left: 3px solid; }
-        .alert-success { background: #052e16; color: #4ade80; border-color: #16a34a; }
-        .alert-error   { background: #2d0a0a; color: #fca5a5; border-color: #dc2626; }
-        .alert-warning { background: #2d1f00; color: #fcd34d; border-color: #d97706; }
-        .alert-info    { background: #0a1628; color: #93c5fd; border-color: var(--accent); }
+/* FILE INPUT */
+input[type=file]{background:var(--card);border:1px solid var(--border);border-radius:5px;
+  color:var(--sub);font-size:11px;padding:4px 8px;cursor:pointer}
+input[type=file]::file-selector-button{background:var(--border);color:var(--sub);border:none;
+  border-radius:3px;padding:3px 8px;font-size:10px;cursor:pointer;margin-right:6px}
+input[type=number]{background:var(--card);border:1px solid var(--border);border-radius:5px;
+  color:var(--text);font-size:11px;padding:5px 8px;outline:none;width:100px}
+input[type=number]:focus{border-color:var(--accent)}
 
-        /* FILE UPLOAD BAR */
-        .upload-bar {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 12px 16px;
-            display: flex; justify-content: space-between; align-items: center;
-            gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
-        }
-        .upload-info { font-size: 12px; color: var(--muted); display: flex; gap: 16px; }
-        .upload-info strong { color: var(--label); }
-        .upload-form { display: flex; gap: 8px; align-items: center; }
-        input[type="file"] {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 6px; color: var(--label); font-size: 12px;
-            padding: 6px 10px; cursor: pointer;
-        }
-        input[type="file"]::file-selector-button {
-            background: var(--border); color: var(--label); border: none;
-            border-radius: 4px; padding: 4px 10px; font-size: 11px; cursor: pointer; margin-right: 8px;
-        }
-        input[type="number"] {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 6px; color: var(--text); font-size: 12px;
-            padding: 6px 10px; outline: none; width: 110px;
-        }
-        input[type="number"]:focus { border-color: var(--accent); }
+/* HERO */
+.hero{background:linear-gradient(135deg,#0d1226 0%,#111635 55%,#100f2a 100%);
+  border:1px solid #1c2248;border-radius:10px;padding:18px 24px;
+  display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;
+  margin-bottom:12px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;
+  background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 65%);pointer-events:none}
+.hero-nw .lbl{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:var(--sub);margin-bottom:3px}
+.hero-nw .val{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;
+  background:linear-gradient(90deg,#7eb4fb,#b09dfb);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-nw .sub{font-size:10px;color:var(--label);margin-top:4px}
+.hero-stats{display:flex;gap:20px}
+.hs .sl{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--sub)}
+.hs .sv{font-size:16px;font-weight:700;margin-top:2px;text-align:right}
+.sv.green{color:var(--green)}.sv.gold{color:var(--gold)}.sv.blue{color:var(--accent)}
 
-        /* HERO */
-        .hero {
-            background: linear-gradient(135deg, #111728 0%, #16183a 50%, #130f2a 100%);
-            border: 1px solid #2a3060; border-radius: 14px;
-            padding: 28px 32px; display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 20px; position: relative; overflow: hidden;
-        }
-        .hero::before {
-            content: ''; position: absolute; top: -60px; right: -60px;
-            width: 260px; height: 260px;
-            background: radial-gradient(circle, rgba(91,141,238,.12) 0%, transparent 70%);
-            pointer-events: none;
-        }
-        .hero-value { z-index: 1; }
-        .hero-value .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 6px; }
-        .hero-value .amount {
-            font-size: 42px; font-weight: 800; letter-spacing: -1px;
-            background: linear-gradient(90deg, #93c5fd, #c4b5fd);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-        }
-        .hero-value .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-        .hero-stats { display: flex; gap: 28px; z-index: 1; }
-        .hero-stat { text-align: right; }
-        .hero-stat .s-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-        .hero-stat .s-val { font-size: 20px; font-weight: 700; color: var(--text); margin-top: 2px; }
-        .hero-stat .s-val.green { color: var(--green); }
-        .hero-stat .s-val.gold  { color: var(--gold); }
+/* MAIN GRID */
+.main-grid{display:grid;grid-template-columns:1fr 320px;gap:12px;align-items:start;margin-bottom:12px}
+@media(max-width:1100px){.main-grid{grid-template-columns:1fr}}
 
-        /* GRID */
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
-        .grid-chart { display: grid; grid-template-columns: 360px 1fr; gap: 18px; margin-bottom: 18px; }
-        @media (max-width: 1100px) { .grid-2, .grid-chart { grid-template-columns: 1fr; } }
+/* SNAPSHOT PANEL */
+.snapshot-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.snap-header{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 14px 8px;border-bottom:1px solid var(--border)}
+.snap-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--sub)}
+.snap-total{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
 
-        /* CARDS */
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-        .card-header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 13px 16px 10px; border-bottom: 1px solid var(--border);
-        }
-        .card-title {
-            font-size: 12px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1px; color: var(--label); display: flex; align-items: center; gap: 7px;
-        }
-        .card-total { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-        .card-body { padding: 0; }
+.snap-row{display:grid;grid-template-columns:22px 1fr 90px 50px 50px;gap:0;
+  align-items:center;padding:6px 14px;border-bottom:1px solid #131726;
+  cursor:pointer;transition:background .1s}
+.snap-row:last-child{border-bottom:none}
+.snap-row:hover{background:rgba(255,255,255,.025)}
+.snap-icon{font-size:13px;text-align:center}
+.snap-name{font-size:12px;font-weight:600;color:var(--text)}
+.snap-meta{font-size:9px;color:var(--sub);margin-top:1px}
+.snap-val{text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.snap-pct{text-align:right;font-size:10px;color:var(--sub)}
+.snap-indicator{text-align:right;padding-right:2px}
 
-        /* TABLES */
-        .data-table { width: 100%; border-collapse: collapse; }
-        .data-table th {
-            padding: 8px 14px; font-size: 10px; font-weight: 700;
-            text-transform: uppercase; letter-spacing: .8px; color: var(--muted);
-            background: var(--surface); text-align: left; border-bottom: 1px solid var(--border);
-        }
-        .data-table th.r { text-align: right; }
-        .data-table td { padding: 8px 14px; border-bottom: 1px solid #1e2335; vertical-align: middle; font-size: 12px; }
-        .data-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
-        .data-table tr:last-child td { border-bottom: none; }
-        .data-table tbody tr:hover { background: rgba(255,255,255,.025); }
-        .data-table .foot td {
-            background: var(--surface); font-weight: 700; color: var(--text);
-            border-top: 1px solid var(--border); border-bottom: none;
-        }
+.pct-bar-wrap{height:2px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden}
+.pct-bar{height:2px;border-radius:2px;transition:width .4s ease}
 
-        /* BADGE */
-        .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: .3px; }
-        .badge-live    { background: #052e16; color: #4ade80; border: 1px solid #16a34a; }
-        .badge-cached  { background: #0a1628; color: #93c5fd; border: 1px solid var(--accent); }
-        .badge-manual  { background: #2d1f00; color: #fcd34d; border: 1px solid #d97706; }
-        .badge-default { background: #1e1b2e; color: #c4b5fd; border: 1px solid #7c3aed; }
+/* RISK PANEL inside snapshot */
+.risk-divider{padding:6px 14px 4px;background:rgba(124,92,246,.06);
+  border-top:1px solid rgba(124,92,246,.18);border-bottom:1px solid rgba(124,92,246,.18)}
+.risk-divider-lbl{font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.2px;color:#9d78f9;display:flex;align-items:center;gap:6px}
+.risk-row{display:grid;grid-template-columns:22px 1fr 80px 60px 56px;
+  align-items:center;padding:5px 14px;border-bottom:1px solid #131726;gap:0}
+.risk-row:last-child{border-bottom:none}
+.risk-row:hover{background:rgba(255,255,255,.02)}
+.risk-type{font-size:11px;font-weight:600}
+.risk-prov{font-size:9px;color:var(--sub);margin-top:1px}
+.risk-val{text-align:right;font-size:11px;font-variant-numeric:tabular-nums;color:var(--green)}
+.risk-prem{text-align:right;font-size:10px;color:var(--sub);font-variant-numeric:tabular-nums}
+.risk-status{text-align:right}
 
-        /* METALS */
-        .metals-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
-        .metal-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 14px 16px; border-bottom: 1px solid var(--border);
-        }
-        .metal-row:last-of-type { border-bottom: none; }
-        .metal-left { display: flex; align-items: center; gap: 12px; }
-        .metal-icon {
-            width: 36px; height: 36px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 18px; flex-shrink: 0;
-        }
-        .metal-icon.gold-icon   { background: linear-gradient(135deg,#7a4f0c,#c9910d); }
-        .metal-icon.silver-icon { background: linear-gradient(135deg,#2e3a47,#5a7a8a); }
-        .metal-info .name { font-size: 14px; font-weight: 700; }
-        .metal-info .qty  { font-size: 11px; color: var(--muted); margin-top: 1px; }
-        .metal-right { text-align: right; }
-        .metal-right .val  { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .metal-right .ppg  { font-size: 11px; color: var(--muted); margin-top: 2px; }
-        .gold-val   { color: var(--gold); }
-        .silver-val { color: var(--silver); }
+.snap-footer{padding:8px 14px;background:var(--surf);display:flex;justify-content:space-between;align-items:center}
+.snap-footer .sf-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.7px}
+.snap-footer .sf-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
 
-        /* PRICE OVERRIDE FORM */
-        .price-form {
-            background: var(--surface); border: 1px solid var(--border); border-top: none;
-            padding: 12px 16px; display: flex; align-items: center; gap: 12px;
-            flex-wrap: wrap; border-radius: 0 0 var(--radius) var(--radius);
-        }
-        .price-form .label { font-size: 11px; color: var(--muted); }
-        .price-field { display: flex; align-items: center; gap: 6px; }
-        .price-field label { font-size: 11px; color: var(--label); white-space: nowrap; }
+/* STATUS BADGES */
+.sbadge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:700;border:1px solid}
+.sbadge-ok   {background:#031a0a;color:#4ade80;border-color:#16a34a}
+.sbadge-warn {background:#160f00;color:#fcd34d;border-color:#a16207}
+.sbadge-error{background:#190505;color:#fca5a5;border-color:#b91c1c}
 
-        /* CHART */
-        .chart-wrap {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 16px; height: 100%;
-        }
-        .chart-wrap h3 {
-            font-size: 12px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1px; color: var(--label); margin-bottom: 14px;
-        }
+/* DOT indicators */
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-ok   {background:var(--green)}
+.dot-warn {background:var(--gold)}
+.dot-error{background:var(--red)}
+.dot-none {background:transparent}
 
-        /* SUMMARY TABLE */
-        .summary-card {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: var(--radius); margin-bottom: 18px; overflow: hidden;
-        }
-        .summary-table th { padding: 10px 16px; }
-        .summary-table td { padding: 9px 16px; }
-        .summary-table .cat-row td { background: #13172a; }
-        .summary-table .cat-row td:first-child {
-            font-weight: 700; color: var(--label); font-size: 11px;
-            text-transform: uppercase; letter-spacing: .5px;
-        }
-        .summary-table .sub-row td:first-child { padding-left: 30px; color: var(--muted); }
-        .summary-table .total-row td {
-            background: #0d1020; font-weight: 800; font-size: 14px; color: var(--text);
-            border-top: 2px solid var(--border);
-        }
+/* CHART COLUMN */
+.chart-col{display:flex;flex-direction:column;gap:12px}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.chart-card h3{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.9px;color:var(--sub);margin-bottom:10px}
 
-        /* UTILITIES */
-        .section-label {
-            font-size: 10px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1.5px; color: var(--muted);
-            margin-bottom: 12px; margin-top: 24px;
-            display: flex; align-items: center; gap: 10px;
-        }
-        .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-        .amount { font-variant-numeric: tabular-nums; font-family: 'Courier New', monospace; }
-        .muted  { color: var(--muted); }
-        .green  { color: var(--green); }
-        .gold   { color: var(--gold); }
-        .silver { color: var(--silver); }
-        .fund-name { font-weight: 600; color: var(--text); }
-        .fund-id   { font-size: 10px; color: var(--muted); font-family: monospace; margin-top: 1px; }
-        .empty-state {
-            text-align: center; padding: 80px 24px;
-            display: flex; flex-direction: column; align-items: center; gap: 16px;
-        }
-        .empty-icon { font-size: 52px; opacity: .4; }
-        .empty-state h2 { font-size: 20px; color: var(--muted); }
-        .empty-state p  { font-size: 14px; color: #3a4260; max-width: 380px; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--surface); }
-        ::-webkit-scrollbar-thumb { background: #2a3050; border-radius: 3px; }
+/* HISTORY */
+.history-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;margin-bottom:12px}
+.history-card h3{font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.9px;color:var(--sub);margin-bottom:8px}
 
-        /* ALERTS PANEL */
-        .alerts-panel {
-            display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px;
-        }
-        .alert-item {
-            padding: 10px 14px; border-radius: 7px; font-size: 12px;
-            border-left: 3px solid; display: flex; align-items: flex-start; gap: 10px;
-        }
-        .alert-item .ai-icon { flex-shrink: 0; font-size: 14px; margin-top: 1px; }
-        .alert-item .ai-body { flex: 1; }
-        .alert-item .ai-code {
-            font-size: 9px; font-weight: 700; letter-spacing: .8px;
-            text-transform: uppercase; opacity: .7; margin-top: 2px;
-        }
-        .alert-error   { background: #1e0a0a; color: #fca5a5; border-color: #dc2626; }
-        .alert-warning { background: #1c1500; color: #fcd34d; border-color: #d97706; }
-        .alert-info    { background: #0a1628; color: #93c5fd; border-color: var(--accent); }
+/* SECTION LABEL */
+.section-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;
+  color:var(--label);display:flex;align-items:center;gap:8px;margin-bottom:8px;margin-top:16px}
+.section-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
 
-        /* HISTORY SPARKLINE */
-        .history-card {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 16px; margin-bottom: 18px;
-        }
-        .history-card h3 {
-            font-size: 12px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 1px; color: var(--label); margin-bottom: 12px;
-        }
-    </style>
+/* BLADES */
+.blade{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  margin-bottom:7px;overflow:hidden}
+.blade-head{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
+  user-select:none;transition:background .1s}
+.blade-head:hover{background:rgba(255,255,255,.03)}
+.blade-icon{font-size:14px;flex-shrink:0}
+.blade-name{font-weight:700;font-size:12px;flex:1}
+.blade-total{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;margin-right:8px}
+.blade-chevron{font-size:11px;color:var(--label);transition:transform .2s;flex-shrink:0}
+.blade-body{display:none;border-top:1px solid var(--border)}
+.blade-body.open{display:block}
+
+/* BLADE MINI-CHART */
+.blade-chart-wrap{padding:12px 14px 0;display:flex;justify-content:center}
+
+/* TABLES */
+.dt{width:100%;border-collapse:collapse}
+.dt th{padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.7px;color:var(--label);background:var(--surf);text-align:left;
+  border-bottom:1px solid var(--border)}
+.dt th.r{text-align:right}
+.dt td{padding:6px 14px;border-bottom:1px solid #131726;font-size:11px;vertical-align:middle}
+.dt td.r{text-align:right;font-variant-numeric:tabular-nums}
+.dt tr:last-child td{border-bottom:none}
+.dt tbody tr:hover{background:rgba(255,255,255,.02)}
+.dt .foot td{background:var(--surf);font-weight:700;font-size:12px;border-top:1px solid var(--border);border-bottom:none}
+.fn{font-weight:600;color:var(--text);font-size:11px}
+.fi{font-size:9px;color:var(--sub);font-family:'Courier New',monospace;margin-top:1px}
+
+/* METALS */
+.metal-blade{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #131726}
+.metal-blade:last-of-type{border-bottom:none}
+.metal-orb{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.metal-orb.gold{background:linear-gradient(135deg,#6b3e00,#c07f0a)}
+.metal-orb.silver{background:linear-gradient(135deg,#283540,#4a6878)}
+.metal-info .mn{font-size:12px;font-weight:700}
+.metal-info .mq{font-size:9px;color:var(--sub);margin-top:1px}
+.metal-right{margin-left:auto;text-align:right}
+.metal-right .mv{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.metal-right .mp{font-size:10px;color:var(--sub);margin-top:2px}
+.gold-t{color:var(--gold)}.silver-t{color:var(--silver)}
+
+/* PRICE FORM */
+.price-form{background:var(--surf);border-top:1px solid var(--border);padding:9px 14px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pf-lbl{font-size:10px;font-weight:700;color:var(--sub);white-space:nowrap}
+.pf-field{display:flex;align-items:center;gap:5px}
+.pf-field label{font-size:10px;color:var(--label);white-space:nowrap}
+
+/* BADGES */
+.badge{display:inline-block;padding:1px 6px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:.3px;border:1px solid}
+.badge-live   {background:#021a0b;color:#4ade80;border-color:#15803d}
+.badge-cached {background:#080f22;color:#7eb4fb;border-color:#1e40af}
+.badge-manual {background:#1c1200;color:#fcd34d;border-color:#a16207}
+.badge-default{background:#140e22;color:#c4b5fd;border-color:#6d28d9}
+.badge-amfi   {background:#051820;color:#67e8f9;border-color:#0e7490}
+
+/* MISC */
+.num{font-variant-numeric:tabular-nums;font-family:'Courier New',monospace}
+.muted{color:var(--sub)}.green{color:var(--green)}.gold{color:var(--gold)}
+.silver{color:var(--silver)}.red{color:var(--red)}
+
+/* EMPTY */
+.empty{text-align:center;padding:80px 20px;display:flex;flex-direction:column;
+  align-items:center;gap:14px}
+.empty-ico{font-size:48px;opacity:.3}
+.empty h2{font-size:18px;color:var(--sub)}
+.empty p{font-size:13px;color:var(--label);max-width:360px}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--surf)}
+::-webkit-scrollbar-thumb{background:#1e2848;border-radius:3px}
+</style>
 </head>
 <body>
 
-<header class="header">
-    <div class="header-brand">
-        <span style="font-size:20px">&#8377;</span>
-        <h1>FINANCE COCKPIT</h1>
-    </div>
-    <div class="header-actions">
-        {% if file_info %}
-        <span style="font-size:11px; color:var(--muted)">
-            &#128196; {{ file_info.filename }} &nbsp;|&nbsp; {{ file_info.uploaded_at|date:"M d, Y H:i" }}
-        </span>
-        <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost">&#8635; Refresh Prices</a>
-        {% endif %}
-    </div>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">&#8377; COCKPIT</span>
+    {% if file_info %}
+    <span class="topbar-file">{{ file_info.filename }} &nbsp;&middot;&nbsp; {{ file_info.uploaded_at|date:"d M Y H:i" }}</span>
+    {% endif %}
+  </div>
+  <div class="topbar-right">
+    {% if file_info %}
+    <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost btn-sm">&#8635; Refresh Prices</a>
+    {% endif %}
+    <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:5px;align-items:center">
+      {% csrf_token %}
+      <input type="file" name="excel_file" accept=".xlsx" required style="max-width:160px">
+      <button type="submit" class="btn btn-primary btn-sm">&#8679; Load File</button>
+    </form>
+  </div>
 </header>
 
 <div class="page">
 
-    {% if messages %}
-    <div class="alert-row">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if errors %}
-    <div class="alert-row">
-        {% for error in errors %}
-        <div class="alert alert-error">&#9888; {{ error }}</div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if warnings %}
-    <div class="alert-row">
-        {% for warning in warnings %}
-        <div class="alert alert-warning">{{ warning }}</div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    <div class="upload-bar">
-        <div class="upload-info">
-            {% if file_info %}
-            <span><strong>File:</strong> {{ file_info.filename }}</span>
-            <span><strong>Loaded:</strong> {{ file_info.uploaded_at|date:"M d, Y H:i" }}</span>
-            {% else %}
-            <span style="color:var(--muted)">No file loaded &mdash; upload an Excel file to begin</span>
-            {% endif %}
-        </div>
-        <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" class="upload-form">
-            {% csrf_token %}
-            <input type="file" name="excel_file" accept=".xlsx" required>
-            <button type="submit" class="btn btn-primary">&#8679; Upload &amp; Load</button>
-        </form>
-    </div>
-
-    {% if data %}
-
-    <div class="hero">
-        <div class="hero-value">
-            <div class="label">Total Net Worth</div>
-            <div class="amount">&#8377;{{ data.global_metrics.total_net_worth|floatformat:0 }}</div>
-            <div class="sub">Across all categories &middot; as of {{ file_info.uploaded_at|date:"M d, Y" }}</div>
-        </div>
-        <div class="hero-stats">
-            <div class="hero-stat">
-                <div class="s-label">Investments</div>
-                <div class="s-val">&#8377;{{ data.global_metrics.total_investments|floatformat:0 }}</div>
-            </div>
-            <div class="hero-stat">
-                <div class="s-label">Liquid &amp; Emergency</div>
-                <div class="s-val green">&#8377;{{ data.global_metrics.total_liquid|floatformat:0 }}</div>
-            </div>
-            <div class="hero-stat">
-                <div class="s-label">Metals</div>
-                <div class="s-val gold">&#8377;{{ data.global_metrics.total_metals|floatformat:0 }}</div>
-            </div>
-        </div>
-    </div>
-
-    {% if alerts %}
-    <div class="alerts-panel">
-        {% for alert in alerts %}
-        <div class="alert-item alert-{{ alert.level }}">
-            <span class="ai-icon">
-                {% if alert.level == 'error' %}&#9888;{% elif alert.level == 'warning' %}&#9888;{% else %}&#8505;{% endif %}
-            </span>
-            <div class="ai-body">
-                {{ alert.message }}
-                <div class="ai-code">{{ alert.code }}</div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if snapshots|length > 1 %}
-    <div class="history-card">
-        <h3>Net Worth History (&#8377;)</h3>
-        <canvas id="historyChart" height="80"></canvas>
-    </div>
-    {% endif %}
-
-    <div class="section-label">Portfolio Summary</div>
-
-    <div class="summary-card">
-        <table class="data-table summary-table">
-            <thead>
-                <tr>
-                    <th>Category</th>
-                    <th>Detail</th>
-                    <th class="r">Value (&#8377;)</th>
-                    <th>Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-
-                <tr class="cat-row">
-                    <td>&#128200; Mutual Funds</td>
-                    <td class="muted">{{ data.mutual_funds_summary.fund_count }} funds</td>
-                    <td class="r amount">{{ data.mutual_funds_summary.total_current_value|floatformat:0 }}</td>
-                    <td class="muted">NAV-based valuation</td>
-                </tr>
-
-                {% for item in data.retirement %}
-                <tr class="sub-row">
-                    <td>{% if forloop.first %}&#127974; Retirement{% endif %}</td>
-                    <td class="muted">{{ item.type }}</td>
-                    <td class="r amount">{{ item.amount|floatformat:0 }}</td>
-                    <td>&mdash;</td>
-                </tr>
-                {% endfor %}
-                <tr class="cat-row">
-                    <td></td>
-                    <td class="muted" style="font-size:11px">Retirement Total</td>
-                    <td class="r amount" style="color:var(--accent)">{{ data.retirement_total|floatformat:0 }}</td>
-                    <td></td>
-                </tr>
-
-                {% for item in data.liquid %}
-                <tr class="sub-row">
-                    <td>{% if forloop.first %}&#128181; Liquid{% endif %}</td>
-                    <td class="muted">{{ item.account_name }} ({{ item.type }})</td>
-                    <td class="r amount">{{ item.amount|floatformat:0 }}</td>
-                    <td>&mdash;</td>
-                </tr>
-                {% endfor %}
-                <tr class="cat-row">
-                    <td></td>
-                    <td class="muted" style="font-size:11px">Liquid Total</td>
-                    <td class="r amount green">{{ data.liquid_total|floatformat:0 }}</td>
-                    <td></td>
-                </tr>
-
-                {% for item in data.emergency_fund %}
-                <tr class="sub-row">
-                    <td>{% if forloop.first %}&#128680; Emergency Fund{% endif %}</td>
-                    <td class="muted">{{ item.account_name }} ({{ item.type }})</td>
-                    <td class="r amount">{{ item.amount|floatformat:0 }}</td>
-                    <td class="muted">{% if item.maturity_date %}Mat: {{ item.maturity_date }}{% else %}&mdash;{% endif %}</td>
-                </tr>
-                {% endfor %}
-                <tr class="cat-row">
-                    <td></td>
-                    <td class="muted" style="font-size:11px">Emergency Total</td>
-                    <td class="r amount green">{{ data.emergency_fund_total|floatformat:0 }}</td>
-                    <td></td>
-                </tr>
-
-                <tr class="cat-row">
-                    <td>&#128737;&#65039; Insurance</td>
-                    <td class="muted">{{ data.insurance|length }} policies</td>
-                    <td class="r amount">{{ data.insurance_summary.total_coverage|floatformat:0 }}</td>
-                    <td class="muted">Coverage &middot; &#8377;{{ data.insurance_summary.total_premium|floatformat:0 }}/yr premium</td>
-                </tr>
-
-                {% for item in data.metals %}
-                <tr class="sub-row">
-                    <td>{% if forloop.first %}&#129681; Metals{% endif %}</td>
-                    <td>
-                        <span style="color:{% if item.type == 'Gold' %}var(--gold){% else %}var(--silver){% endif %}; font-weight:600">
-                            {{ item.type }}
-                        </span>
-                        <span class="muted">&nbsp;{{ item.quantity }}g</span>
-                    </td>
-                    <td class="r amount {% if item.type == 'Gold' %}gold{% else %}silver{% endif %}">
-                        {{ item.value|floatformat:0 }}
-                    </td>
-                    <td>
-                        &#8377;{{ item.price_per_gram|floatformat:0 }}/g &nbsp;
-                        {% if 'Live' in item.price_source %}<span class="badge badge-live">Live</span>
-                        {% elif 'Manual' in item.price_source %}<span class="badge badge-manual">Manual</span>
-                        {% elif 'Default' in item.price_source %}<span class="badge badge-default">Default</span>
-                        {% else %}<span class="badge badge-cached">Cached</span>{% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-                <tr class="cat-row">
-                    <td></td>
-                    <td class="muted" style="font-size:11px">Metals Total</td>
-                    <td class="r amount gold">{{ data.metals_total|floatformat:0 }}</td>
-                    <td></td>
-                </tr>
-
-                <tr class="total-row">
-                    <td colspan="2">NET WORTH</td>
-                    <td class="r amount">&#8377; {{ data.global_metrics.total_net_worth|floatformat:0 }}</td>
-                    <td></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="section-label">Allocation &amp; Metals</div>
-
-    <div class="grid-chart">
-        <div class="chart-wrap">
-            <h3>Asset Allocation</h3>
-            <canvas id="allocChart" height="320"></canvas>
-        </div>
-
-        <div class="metals-card">
-            <div class="card-header" style="border-radius:var(--radius) var(--radius) 0 0">
-                <div class="card-title">&#129681; Metals</div>
-                <div style="font-size:11px; color:var(--muted)">&#8377;{{ data.metals_total|floatformat:0 }} total</div>
-            </div>
-
-            {% for item in data.metals %}
-            <div class="metal-row">
-                <div class="metal-left">
-                    <div class="metal-icon {% if item.type == 'Gold' %}gold-icon{% else %}silver-icon{% endif %}">
-                        {% if item.type == 'Gold' %}&#129351;{% else %}&#129352;{% endif %}
-                    </div>
-                    <div class="metal-info">
-                        <div class="name {% if item.type == 'Gold' %}gold{% else %}silver{% endif %}">{{ item.type }}</div>
-                        <div class="qty">{{ item.quantity }}g &nbsp;&middot;&nbsp;
-                            {% if 'Live' in item.price_source %}<span class="badge badge-live">Live</span>
-                            {% elif 'Manual' in item.price_source %}<span class="badge badge-manual">Manual</span>
-                            {% elif 'Default' in item.price_source %}<span class="badge badge-default">Default &mdash; update recommended</span>
-                            {% else %}<span class="badge badge-cached">Cached</span>{% endif %}
-                            &nbsp;<span style="color:var(--muted); font-size:10px">{{ item.price_source }}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="metal-right">
-                    <div class="val {% if item.type == 'Gold' %}gold-val{% else %}silver-val{% endif %}">
-                        &#8377;{{ item.value|floatformat:0 }}
-                    </div>
-                    <div class="ppg">&#8377;{{ item.price_per_gram|floatformat:0 }} / gram</div>
-                </div>
-            </div>
-            {% endfor %}
-
-            <form method="post" action="{% url 'update_metal_prices' %}" class="price-form">
-                {% csrf_token %}
-                <span class="label" style="font-weight:600">Manual Price Override (&#8377;/gram)</span>
-                <div class="price-field">
-                    <label for="gold_price">Gold</label>
-                    <input type="number" id="gold_price" name="gold_price" placeholder="e.g. 8500" step="1" min="0">
-                </div>
-                <div class="price-field">
-                    <label for="silver_price">Silver</label>
-                    <input type="number" id="silver_price" name="silver_price" placeholder="e.g. 100" step="0.5" min="0">
-                </div>
-                <button type="submit" class="btn btn-gold">Set Prices</button>
-                <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost">&#8635; Auto-Fetch</a>
-            </form>
-        </div>
-    </div>
-
-    <div class="section-label">Detailed Breakdown</div>
-
-    <div class="grid-2">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">&#128200; Mutual Funds</div>
-                <div class="card-total">&#8377;{{ data.mutual_funds_summary.total_current_value|floatformat:0 }}</div>
-            </div>
-            <div class="card-body">
-                <table class="data-table">
-                    <thead><tr>
-                        <th>Fund</th>
-                        <th class="r">Units</th>
-                        <th class="r">NAV</th>
-                        <th class="r">Value (&#8377;)</th>
-                    </tr></thead>
-                    <tbody>
-                        {% for fund in data.mutual_funds %}
-                        <tr>
-                            <td>
-                                <div class="fund-name">{{ fund.fund_name|truncatewords:5 }}</div>
-                                <div class="fund-id">{{ fund.identifier }}
-                                    {% if 'Live' in fund.nav_source %}<span class="badge badge-live">Live</span>
-                                    {% elif 'Cached' in fund.nav_source %}<span class="badge badge-cached">Cached</span>
-                                    {% else %}<span class="badge badge-cached">{{ fund.nav_source }}</span>{% endif %}
-                                </div>
-                            </td>
-                            <td class="r muted">{{ fund.units|floatformat:2 }}</td>
-                            <td class="r">&#8377;{{ fund.nav|floatformat:2 }}</td>
-                            <td class="r amount" style="font-weight:600">{{ fund.current_value|floatformat:0 }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="foot"><td colspan="3">Total</td><td class="r amount">{{ data.mutual_funds_summary.total_current_value|floatformat:0 }}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">&#128680; Emergency Fund</div>
-                <div class="card-total">&#8377;{{ data.emergency_fund_total|floatformat:0 }}</div>
-            </div>
-            <div class="card-body">
-                <table class="data-table">
-                    <thead><tr>
-                        <th>Account</th>
-                        <th>Type</th>
-                        <th class="r">Amount (&#8377;)</th>
-                        <th>Maturity</th>
-                    </tr></thead>
-                    <tbody>
-                        {% for item in data.emergency_fund %}
-                        <tr>
-                            <td style="font-weight:600">{{ item.account_name }}</td>
-                            <td><span class="badge badge-cached">{{ item.type }}</span></td>
-                            <td class="r amount">{{ item.amount|floatformat:0 }}</td>
-                            <td class="muted">{{ item.maturity_date|default:"&mdash;" }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="foot"><td colspan="2">Total</td><td class="r amount">{{ data.emergency_fund_total|floatformat:0 }}</td><td></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">&#128181; Liquid Accounts</div>
-                <div class="card-total">&#8377;{{ data.liquid_total|floatformat:0 }}</div>
-            </div>
-            <div class="card-body">
-                <table class="data-table">
-                    <thead><tr>
-                        <th>Account</th>
-                        <th>Type</th>
-                        <th class="r">Amount (&#8377;)</th>
-                    </tr></thead>
-                    <tbody>
-                        {% for item in data.liquid %}
-                        <tr>
-                            <td style="font-weight:600">{{ item.account_name }}</td>
-                            <td class="muted">{{ item.type }}</td>
-                            <td class="r amount">{{ item.amount|floatformat:0 }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="foot"><td colspan="2">Total</td><td class="r amount">{{ data.liquid_total|floatformat:0 }}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">&#128737;&#65039; Insurance</div>
-                <div class="card-total">&#8377;{{ data.insurance_summary.total_coverage|floatformat:0 }}</div>
-            </div>
-            <div class="card-body">
-                <table class="data-table">
-                    <thead><tr>
-                        <th>Type</th>
-                        <th>Provider</th>
-                        <th class="r">Premium (&#8377;)</th>
-                        <th class="r">Coverage (&#8377;)</th>
-                    </tr></thead>
-                    <tbody>
-                        {% for item in data.insurance %}
-                        <tr>
-                            <td style="font-weight:600">{{ item.type }}</td>
-                            <td class="muted">{{ item.provider }}</td>
-                            <td class="r amount">{{ item.premium|floatformat:0 }}</td>
-                            <td class="r amount green">{{ item.coverage|floatformat:0 }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="foot">
-                            <td colspan="2">Total</td>
-                            <td class="r amount">{{ data.insurance_summary.total_premium|floatformat:0 }}</td>
-                            <td class="r amount green">{{ data.insurance_summary.total_coverage|floatformat:0 }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <script>
-    (function () {
-        const labels = ['Mutual Funds','Retirement','Liquid','Emergency Fund','Metals'];
-        const vals = [
-            {{ data.mutual_funds_summary.total_current_value }},
-            {{ data.retirement_total }},
-            {{ data.liquid_total }},
-            {{ data.emergency_fund_total }},
-            {{ data.metals_total }}
-        ];
-        const colours = ['#5b8dee','#8b5cf6','#34d399','#f87171','#f5c842'];
-        new Chart(document.getElementById('allocChart').getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels,
-                datasets: [{ data: vals, backgroundColor: colours, borderColor: '#1b1f30', borderWidth: 3, hoverOffset: 8 }]
-            },
-            options: {
-                responsive: true, cutout: '62%',
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 }, padding: 16, usePointStyle: true, pointStyleWidth: 10 } },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
-                                const pct = total > 0 ? ((ctx.parsed/total)*100).toFixed(1) : 0;
-                                return ' \u20b9' + ctx.parsed.toLocaleString('en-IN') + '  (' + pct + '%)';
-                            }
-                        },
-                        backgroundColor: '#1b1f30', borderColor: '#252a40', borderWidth: 1,
-                        titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 12
-                    }
-                }
-            }
-        });
-    })();
-
-    {% if snapshots|length > 1 %}
-    (function () {
-        const snapshots = {{ snapshots|safe }};
-        const labels  = snapshots.map(s => s.month);
-        const nwVals  = snapshots.map(s => s.total_net_worth);
-        new Chart(document.getElementById('historyChart').getContext('2d'), {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Net Worth',
-                    data: nwVals,
-                    borderColor: '#5b8dee',
-                    backgroundColor: 'rgba(91,141,238,0.08)',
-                    borderWidth: 2,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#5b8dee',
-                    tension: 0.35,
-                    fill: true,
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => ' \u20b9' + ctx.parsed.y.toLocaleString('en-IN'),
-                        },
-                        backgroundColor: '#1b1f30', borderColor: '#252a40', borderWidth: 1,
-                        titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10,
-                    }
-                },
-                scales: {
-                    x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#1e2335' } },
-                    y: {
-                        ticks: {
-                            color: '#64748b', font: { size: 10 },
-                            callback: v => '\u20b9' + (v/100000).toFixed(1) + 'L',
-                        },
-                        grid: { color: '#1e2335' },
-                    }
-                }
-            }
-        });
-    })();
-    {% endif %}
-    </script>
-
-    {% else %}
-    <div class="empty-state">
-        <div class="empty-icon">&#128194;</div>
-        <h2>No data loaded</h2>
-        <p>Upload an Excel file above to view your financial cockpit.</p>
-    </div>
-    {% endif %}
-
+{% if messages %}
+<div class="toast-row">
+  {% for msg in messages %}
+  <div class="toast toast-{{ msg.tags }}">
+    <span>{% if msg.tags == 'success' %}&#10003;{% elif msg.tags == 'error' %}&#9888;{% else %}&#8505;{% endif %}</span>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
 </div>
+{% endif %}
+
+{% if errors %}
+<div class="toast-row">
+  {% for e in errors %}<div class="toast toast-error"><span>&#9888;</span><div>{{ e }}</div></div>{% endfor %}
+</div>
+{% endif %}
+
+{% for alert in alerts %}
+{% if alert.level == 'error' %}<div class="alert-strip error">&#9888;&nbsp; {{ alert.message }}</div>
+{% elif alert.level == 'warning' %}<div class="alert-strip">&#9888;&nbsp; {{ alert.message }}</div>
+{% endif %}
+{% endfor %}
+
+{% if portfolio %}
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-nw">
+    <div class="lbl">Net Worth (Assets Only)</div>
+    <div class="val">&#8377;{{ portfolio.net_worth|floatformat:0 }}</div>
+    <div class="sub">{{ portfolio.categories|length }} asset categories &nbsp;&middot;&nbsp; {{ file_info.uploaded_at|date:"d M Y" }}</div>
+  </div>
+  <div class="hero-stats">
+    <div class="hs">
+      <div class="sl">Investments</div>
+      <div class="sv blue">&#8377;{{ portfolio.mf_total|floatformat:0 }}</div>
+    </div>
+    <div class="hs">
+      <div class="sl">Liquid + EF</div>
+      <div class="sv green">&#8377;{{ portfolio.liquid_plus_ef|floatformat:0 }}</div>
+    </div>
+    <div class="hs">
+      <div class="sl">Metals</div>
+      <div class="sv gold">&#8377;{{ portfolio.metals_total|floatformat:0 }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN GRID -->
+<div class="main-grid">
+
+  <!-- LEFT: Snapshot + Risk -->
+  <div class="snapshot-panel">
+    <div class="snap-header">
+      <span class="snap-title">Asset Snapshot</span>
+      <span class="snap-total">&#8377;{{ portfolio.net_worth|floatformat:0 }}</span>
+    </div>
+
+    {% for cat in portfolio.categories %}
+    <div class="snap-row" onclick="toggleBlade('blade-{{ cat.key }}')">
+      <div class="snap-icon">{{ cat.icon }}</div>
+      <div>
+        <div class="snap-name">{{ cat.label }}</div>
+        <div class="snap-meta">{{ cat.meta }}</div>
+        <div class="pct-bar-wrap">
+          <div class="pct-bar" style="width:{{ cat.pct }}%;background:{% if cat.key == 'mutual_funds' %}#4f8ef7{% elif cat.key == 'retirement' %}#7c5cf6{% elif cat.key == 'liquid' %}#2dd4a0{% elif cat.key == 'emergency_fund' %}#f06b6b{% else %}#e8b44a{% endif %}"></div>
+        </div>
+      </div>
+      <div class="snap-val num">&#8377;{{ cat.value|floatformat:0 }}</div>
+      <div class="snap-pct">{{ cat.pct }}%</div>
+      <div class="snap-indicator">
+        {% if cat.alert_level == 'ok' %}<span class="dot dot-ok"></span>
+        {% elif cat.alert_level == 'warn' %}<span class="dot dot-warn"></span>
+        {% elif cat.alert_level == 'error' %}<span class="dot dot-error"></span>
+        {% else %}<span class="dot dot-none"></span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="snap-footer">
+      <span class="sf-lbl">Total Net Worth</span>
+      <span class="sf-val num">&#8377;{{ portfolio.net_worth|floatformat:0 }}</span>
+    </div>
+
+    <!-- RISK MANAGEMENT SECTION -->
+    {% if portfolio.risk_rows %}
+    <div class="risk-divider">
+      <span class="risk-divider-lbl">&#128737; Risk Management &mdash; {{ portfolio.risk_summary.policy_count }} polic{% if portfolio.risk_summary.policy_count != 1 %}ies{% else %}y{% endif %}</span>
+    </div>
+    {% for r in portfolio.risk_rows %}
+    <div class="risk-row" onclick="toggleBlade('blade-insurance')">
+      <div style="font-size:13px;text-align:center">&#128737;</div>
+      <div>
+        <div class="risk-type">{{ r.type }}</div>
+        <div class="risk-prov">{{ r.provider }}</div>
+      </div>
+      <div class="risk-val num">&#8377;{{ r.coverage|floatformat:0 }}</div>
+      <div class="risk-prem num">&#8377;{{ r.premium|floatformat:0 }}/yr</div>
+      <div class="risk-status">
+        <span class="sbadge sbadge-{{ r.status_level }}">{{ r.status }}</span>
+      </div>
+    </div>
+    {% endfor %}
+    <div style="padding:6px 14px;background:var(--surf);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:.7px">Total Coverage</span>
+      <span style="font-size:13px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums">&#8377;{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- RIGHT: Charts -->
+  <div class="chart-col">
+    <div class="chart-card">
+      <h3>Asset Allocation</h3>
+      <canvas id="allocChart" height="210"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Category Comparison</h3>
+      <canvas id="barChart" height="170"></canvas>
+    </div>
+  </div>
+
+</div><!-- /main-grid -->
+
+{% if snapshots|length > 1 %}
+<div class="history-card">
+  <h3>Net Worth History</h3>
+  <canvas id="historyChart" height="65"></canvas>
+</div>
+{% endif %}
+
+<!-- DETAIL BLADES -->
+<div class="section-lbl">Detail Breakdown</div>
+
+<!-- Mutual Funds -->
+<div class="blade" id="blade-mutual_funds">
+  <div class="blade-head" onclick="toggleBlade('blade-mutual_funds')">
+    <span class="blade-icon">📈</span>
+    <span class="blade-name">Mutual Funds</span>
+    <span class="blade-total num">&#8377;{{ portfolio.mf_total|floatformat:0 }}</span>
+    <span class="blade-chevron" id="chev-blade-mutual_funds">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-mutual_funds">
+    {% if portfolio.mf_chart.labels %}
+    <div class="blade-chart-wrap">
+      <canvas id="mfChart" width="220" height="160" style="max-width:220px"></canvas>
+    </div>
+    {% endif %}
+    <table class="dt">
+      <thead><tr><th>Fund</th><th class="r">Units</th><th class="r">NAV</th><th class="r">Value &#8377;</th></tr></thead>
+      <tbody>
+        {% for f in portfolio.mutual_funds %}
+        <tr>
+          <td>
+            <div class="fn">{{ f.fund_name|truncatewords:6 }}</div>
+            <div class="fi">{{ f.identifier }}
+              {% if 'AMFI' in f.nav_source or 'Live' in f.nav_source %}<span class="badge badge-live">AMFI</span>
+              {% elif 'MFAPI' in f.nav_source %}<span class="badge badge-amfi">MFAPI</span>
+              {% elif 'Cached' in f.nav_source %}<span class="badge badge-cached">Cached</span>
+              {% else %}<span class="badge badge-default">{{ f.nav_source|truncatechars:12 }}</span>{% endif %}
+            </div>
+          </td>
+          <td class="r muted">{{ f.units|floatformat:2 }}</td>
+          <td class="r num">&#8377;{{ f.nav|floatformat:2 }}</td>
+          <td class="r num" style="font-weight:600">{{ f.current_value|floatformat:0 }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="foot"><td colspan="3">Total</td><td class="r num">{{ portfolio.mf_total|floatformat:0 }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Retirement -->
+<div class="blade" id="blade-retirement">
+  <div class="blade-head" onclick="toggleBlade('blade-retirement')">
+    <span class="blade-icon">🏦</span>
+    <span class="blade-name">Retirement</span>
+    <span class="blade-total num">&#8377;{{ portfolio.retirement_total|floatformat:0 }}</span>
+    <span class="blade-chevron" id="chev-blade-retirement">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-retirement">
+    {% if portfolio.retirement_chart.labels %}
+    <div class="blade-chart-wrap">
+      <canvas id="retChart" width="220" height="160" style="max-width:220px"></canvas>
+    </div>
+    {% endif %}
+    <table class="dt">
+      <thead><tr><th>Type</th><th class="r">Amount &#8377;</th></tr></thead>
+      <tbody>
+        {% for item in portfolio.retirement %}
+        <tr><td style="font-weight:600">{{ item.type }}</td><td class="r num">{{ item.amount|floatformat:0 }}</td></tr>
+        {% endfor %}
+        <tr class="foot"><td>Total</td><td class="r num">{{ portfolio.retirement_total|floatformat:0 }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Liquid -->
+<div class="blade" id="blade-liquid">
+  <div class="blade-head" onclick="toggleBlade('blade-liquid')">
+    <span class="blade-icon">💵</span>
+    <span class="blade-name">Liquid Accounts</span>
+    <span class="blade-total num">&#8377;{{ portfolio.liquid_total|floatformat:0 }}</span>
+    <span class="blade-chevron" id="chev-blade-liquid">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-liquid">
+    {% if portfolio.liquid_chart.labels %}
+    <div class="blade-chart-wrap">
+      <canvas id="liqChart" width="220" height="160" style="max-width:220px"></canvas>
+    </div>
+    {% endif %}
+    <table class="dt">
+      <thead><tr><th>Account</th><th>Type</th><th class="r">Amount &#8377;</th></tr></thead>
+      <tbody>
+        {% for item in portfolio.liquid %}
+        <tr><td style="font-weight:600">{{ item.account_name }}</td><td class="muted">{{ item.type }}</td><td class="r num">{{ item.amount|floatformat:0 }}</td></tr>
+        {% endfor %}
+        <tr class="foot"><td colspan="2">Total</td><td class="r num">{{ portfolio.liquid_total|floatformat:0 }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Emergency Fund -->
+<div class="blade" id="blade-emergency_fund">
+  <div class="blade-head" onclick="toggleBlade('blade-emergency_fund')">
+    <span class="blade-icon">🚨</span>
+    <span class="blade-name">Emergency Fund</span>
+    <span class="blade-total num">&#8377;{{ portfolio.emergency_fund_total|floatformat:0 }}</span>
+    <span class="blade-chevron" id="chev-blade-emergency_fund">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-emergency_fund">
+    {% if portfolio.ef_chart.labels %}
+    <div class="blade-chart-wrap">
+      <canvas id="efChart" width="220" height="160" style="max-width:220px"></canvas>
+    </div>
+    {% endif %}
+    <table class="dt">
+      <thead><tr><th>Account</th><th>Type</th><th class="r">Amount &#8377;</th><th>Maturity</th></tr></thead>
+      <tbody>
+        {% for item in portfolio.emergency_fund %}
+        <tr>
+          <td style="font-weight:600">{{ item.account_name }}</td>
+          <td><span class="badge badge-cached">{{ item.type }}</span></td>
+          <td class="r num">{{ item.amount|floatformat:0 }}</td>
+          <td class="muted">{{ item.maturity_date|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="foot"><td colspan="2">Total</td><td class="r num">{{ portfolio.emergency_fund_total|floatformat:0 }}</td><td></td></tr>
+      </tbody>
+    </table>
+    {% if portfolio.emergency_fund_by_type %}
+    <div style="padding:7px 14px;background:var(--surf);border-top:1px solid var(--border);font-size:10px;color:var(--sub);display:flex;gap:16px;flex-wrap:wrap">
+      {% for type, total in portfolio.emergency_fund_by_type.items %}
+      <span>{{ type }}: <strong style="color:var(--text)">&#8377;{{ total|floatformat:0 }}</strong></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Insurance / Risk Management blade -->
+<div class="blade" id="blade-insurance">
+  <div class="blade-head" onclick="toggleBlade('blade-insurance')">
+    <span class="blade-icon">&#128737;</span>
+    <span class="blade-name">Risk Management</span>
+    <span class="blade-total num green">&#8377;{{ portfolio.risk_summary.total_coverage|floatformat:0 }} <span style="font-size:9px;color:var(--sub);font-weight:400">coverage</span></span>
+    <span class="blade-chevron" id="chev-blade-insurance">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-insurance">
+    <div style="padding:8px 14px;background:rgba(124,92,246,.05);border-bottom:1px solid var(--border);font-size:10px;color:var(--sub)">
+      Insurance is <strong style="color:#c4b5fd">not included</strong> in net worth. Coverage is a liability hedge, not an asset.
+    </div>
+    <table class="dt">
+      <thead><tr><th>Type</th><th>Provider</th><th class="r">Coverage &#8377;</th><th class="r">Premium &#8377;/yr</th><th class="r">Status</th></tr></thead>
+      <tbody>
+        {% for r in portfolio.risk_rows %}
+        <tr>
+          <td style="font-weight:600">{{ r.type }}</td>
+          <td class="muted">{{ r.provider }}</td>
+          <td class="r num green">{{ r.coverage|floatformat:0 }}</td>
+          <td class="r num muted">{{ r.premium|floatformat:0 }}</td>
+          <td class="r"><span class="sbadge sbadge-{{ r.status_level }}">{{ r.status }}</span></td>
+        </tr>
+        {% endfor %}
+        <tr class="foot">
+          <td colspan="2">Total</td>
+          <td class="r num green">{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</td>
+          <td class="r num muted">{{ portfolio.risk_summary.total_premium|floatformat:0 }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Metals -->
+<div class="blade" id="blade-metals">
+  <div class="blade-head" onclick="toggleBlade('blade-metals')">
+    <span class="blade-icon">&#129353;</span>
+    <span class="blade-name">Metals</span>
+    <span class="blade-total num gold">&#8377;{{ portfolio.metals_total|floatformat:0 }}</span>
+    <span class="blade-chevron" id="chev-blade-metals">&#9660;</span>
+  </div>
+  <div class="blade-body" id="body-blade-metals">
+    {% if portfolio.metals_chart.labels %}
+    <div class="blade-chart-wrap">
+      <canvas id="metChart" width="220" height="160" style="max-width:220px"></canvas>
+    </div>
+    {% endif %}
+    {% for m in portfolio.metals %}
+    <div class="metal-blade">
+      <div class="metal-orb {% if m.type == 'Gold' %}gold{% else %}silver{% endif %}">
+        {% if m.type == 'Gold' %}&#129351;{% else %}&#129352;{% endif %}
+      </div>
+      <div class="metal-info">
+        <div class="mn {% if m.type == 'Gold' %}gold-t{% else %}silver-t{% endif %}">{{ m.type }}</div>
+        <div class="mq">{{ m.quantity }}g &nbsp;&middot;&nbsp;
+          {% if 'Live' in m.price_source %}<span class="badge badge-live">Live</span>
+          {% elif 'Manual' in m.price_source %}<span class="badge badge-manual">Manual</span>
+          {% elif 'Default' in m.price_source %}<span class="badge badge-default">Default</span>
+          {% else %}<span class="badge badge-cached">Cached</span>{% endif %}
+          <span style="color:var(--label);font-size:9px">&nbsp;{{ m.price_source }}</span>
+        </div>
+      </div>
+      <div class="metal-right">
+        <div class="mv {% if m.type == 'Gold' %}gold-t{% else %}silver-t{% endif %}">&#8377;{{ m.value|floatformat:0 }}</div>
+        <div class="mp">&#8377;{{ m.price_per_gram|floatformat:0 }}/g</div>
+      </div>
+    </div>
+    {% endfor %}
+    <form method="post" action="{% url 'update_metal_prices' %}" class="price-form">
+      {% csrf_token %}
+      <span class="pf-lbl">Override &#8377;/gram:</span>
+      <div class="pf-field"><label for="gp">Gold</label><input type="number" id="gp" name="gold_price" placeholder="e.g. 9200" step="1" min="1001"></div>
+      <div class="pf-field"><label for="sp">Silver</label><input type="number" id="sp" name="silver_price" placeholder="e.g. 110" step="0.5" min="11"></div>
+      <button type="submit" class="btn btn-gold btn-sm">Set</button>
+      <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost btn-sm">&#8635; Auto-fetch</a>
+    </form>
+  </div>
+</div>
+
+{% else %}
+<div class="empty">
+  <div class="empty-ico">&#128194;</div>
+  <h2>No data loaded</h2>
+  <p>Upload your Excel file using the button in the top bar to get started.</p>
+</div>
+{% endif %}
+
+</div><!-- /page -->
+
+<script>
+/* BLADE TOGGLE */
+function toggleBlade(id) {
+  var body = document.getElementById('body-' + id);
+  var chev = document.getElementById('chev-' + id);
+  if (!body) return;
+  var open = body.classList.contains('open');
+  body.classList.toggle('open', !open);
+  if (chev) chev.style.transform = open ? '' : 'rotate(-90deg)';
+}
+
+{% if portfolio %}
+/* CHART UTILITIES */
+var _chartDefaults = {
+  backgroundColor:'#161929', borderColor:'#1e2438', borderWidth:1,
+  titleColor:'#dde3f0', bodyColor:'#7a85a3', padding:10,
+};
+function makeDoughnut(id, labels, values, colours) {
+  var el = document.getElementById(id);
+  if (!el || !labels.length) return;
+  new Chart(el, {
+    type: 'doughnut',
+    data: { labels: labels, datasets: [{ data: values, backgroundColor: colours,
+      borderColor:'#161929', borderWidth:2, hoverOffset:4 }] },
+    options: { responsive:false, cutout:'58%',
+      plugins: {
+        legend:{ position:'bottom', labels:{ color:'#7a85a3', font:{size:9}, padding:8,
+          usePointStyle:true, pointStyleWidth:7 } },
+        tooltip:{ callbacks:{ label: function(ctx){
+          var t=ctx.dataset.data.reduce(function(a,b){return a+b},0);
+          var p=t>0?((ctx.parsed/t)*100).toFixed(1):0;
+          return ' \u20b9'+ctx.parsed.toLocaleString('en-IN')+'  ('+p+'%)';
+        }}, backgroundColor:_chartDefaults.backgroundColor,
+          borderColor:_chartDefaults.borderColor, borderWidth:1,
+          titleColor:_chartDefaults.titleColor, bodyColor:_chartDefaults.bodyColor, padding:_chartDefaults.padding }
+      }
+    }
+  });
+}
+
+/* GLOBAL ALLOCATION */
+(function(){
+  var labels  = {{ portfolio.allocation_chart.labels|safe }};
+  var values  = {{ portfolio.allocation_chart.values|safe }};
+  var colours = {{ portfolio.allocation_chart.colours|safe }};
+
+  new Chart(document.getElementById('allocChart'), {
+    type:'doughnut', data:{ labels:labels, datasets:[{ data:values,
+      backgroundColor:colours, borderColor:'#161929', borderWidth:2, hoverOffset:6 }] },
+    options:{ responsive:true, cutout:'60%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ color:'#7a85a3', font:{size:10}, padding:12,
+          usePointStyle:true, pointStyleWidth:8 } },
+        tooltip:{ callbacks:{ label:function(ctx){
+          var t=ctx.dataset.data.reduce(function(a,b){return a+b},0);
+          var p=t>0?((ctx.parsed/t)*100).toFixed(1):0;
+          return ' \u20b9'+ctx.parsed.toLocaleString('en-IN')+'  ('+p+'%)';
+        }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
+          titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('barChart'), {
+    type:'bar', data:{ labels:labels, datasets:[{ data:values,
+      backgroundColor:colours.map(function(c){return c+'cc'}),
+      borderColor:colours, borderWidth:1, borderRadius:4 }] },
+    options:{ responsive:true, indexAxis:'y',
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
+        return ' \u20b9'+ctx.parsed.x.toLocaleString('en-IN');
+      }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
+        titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 } },
+      scales:{
+        x:{ ticks:{ color:'#5a6380',font:{size:9},
+          callback:function(v){return '\u20b9'+(v/100000).toFixed(0)+'L'} },
+          grid:{color:'#131726'} },
+        y:{ ticks:{ color:'#7a85a3',font:{size:10} }, grid:{display:false} }
+      }
+    }
+  });
+
+  {% if snapshots|length > 1 %}
+  var sd = {{ snapshots|safe }};
+  new Chart(document.getElementById('historyChart'), {
+    type:'line', data:{ labels:sd.map(function(s){return s.month}),
+      datasets:[{ label:'Net Worth', data:sd.map(function(s){return s.total_net_worth}),
+        borderColor:'#4f8ef7', backgroundColor:'rgba(79,142,247,0.07)',
+        borderWidth:2, pointRadius:3, pointBackgroundColor:'#4f8ef7',
+        tension:0.38, fill:true }] },
+    options:{ responsive:true,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
+        return ' \u20b9'+ctx.parsed.y.toLocaleString('en-IN');
+      }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
+        titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 } },
+      scales:{
+        x:{ ticks:{color:'#5a6380',font:{size:9}}, grid:{color:'#131726'} },
+        y:{ ticks:{color:'#5a6380',font:{size:9},
+          callback:function(v){return '\u20b9'+(v/100000).toFixed(1)+'L'}},
+          grid:{color:'#131726'} }
+      }
+    }
+  });
+  {% endif %}
+})();
+
+/* PER-BLADE MINI DOUGHNUTS */
+makeDoughnut('mfChart',  {{ portfolio.mf_chart.labels|safe }},  {{ portfolio.mf_chart.values|safe }},  {{ portfolio.mf_chart.colours|safe }});
+makeDoughnut('retChart', {{ portfolio.retirement_chart.labels|safe }}, {{ portfolio.retirement_chart.values|safe }}, {{ portfolio.retirement_chart.colours|safe }});
+makeDoughnut('liqChart', {{ portfolio.liquid_chart.labels|safe }}, {{ portfolio.liquid_chart.values|safe }}, {{ portfolio.liquid_chart.colours|safe }});
+makeDoughnut('efChart',  {{ portfolio.ef_chart.labels|safe }},  {{ portfolio.ef_chart.values|safe }},  {{ portfolio.ef_chart.colours|safe }});
+makeDoughnut('metChart', {{ portfolio.metals_chart.labels|safe }}, {{ portfolio.metals_chart.values|safe }}, {{ portfolio.metals_chart.colours|safe }});
+{% endif %}
+</script>
 </body>
 </html>

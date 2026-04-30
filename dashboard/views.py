@@ -1,30 +1,36 @@
 """
-Dashboard Views
-Handle all view logic for the finance dashboard
+Dashboard Views — clean, thin controllers.
+All business logic lives in services/.
 """
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.http import JsonResponse
-from django.core.files.storage import FileSystemStorage
-from django.conf import settings
-from datetime import datetime
 import os
-from .services.excel_parser import parse_excel_file, ExcelParserError
-from .services.metal_price_service import set_manual_price, refresh_prices, get_all_metal_prices
-from .services.alerts import run_alerts
+from datetime import datetime
+
+from django.conf import settings
+from django.contrib import messages
+from django.core.files.storage import FileSystemStorage
+from django.shortcuts import redirect, render
+
 from .models import FileUploadHistory, NetWorthSnapshot
+from .services.alerts import run_alerts
+from .services.calculation_engine import build_portfolio
+from .services.excel_parser import ExcelParserError, parse_excel_file
+from .services.metal_price_service import (
+    get_all_metal_prices,
+    refresh_prices,
+    set_manual_price,
+)
 
 
-def _capture_snapshot(data: dict) -> None:
-    """
-    Upsert a NetWorthSnapshot for the current month.
-    Safe to call on every page load — only one row per YYYY-MM.
-    """
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _upsert_snapshot(data: dict) -> None:
+    """Upsert monthly net-worth snapshot. Non-critical — never raises."""
     try:
-        month = datetime.now().strftime("%Y-%m")
         metrics = data.get("global_metrics", {})
         NetWorthSnapshot.objects.update_or_create(
-            month=month,
+            month=datetime.now().strftime("%Y-%m"),
             defaults={
                 "total_net_worth": metrics.get("total_net_worth", 0),
                 "mutual_funds":    data.get("mutual_funds_summary", {}).get("total_current_value", 0),
@@ -35,136 +41,114 @@ def _capture_snapshot(data: dict) -> None:
             },
         )
     except Exception:
-        pass   # snapshots are non-critical
+        pass
 
+
+# ---------------------------------------------------------------------------
+# Views
+# ---------------------------------------------------------------------------
 
 def dashboard_view(request):
-    """
-    Main dashboard view
-    Displays financial data from the last uploaded Excel file
-    """
     context = {
-        'data': None,
-        'file_info': None,
-        'errors': [],
-        'warnings': [],
+        "portfolio": None,
+        "file_info": None,
+        "alerts": [],
+        "errors": [],
+        "warnings": [],
+        "snapshots": [],
     }
-    
-    # Get the last uploaded file from history
+
     last_upload = FileUploadHistory.objects.first()
-    
-    if last_upload and os.path.exists(last_upload.file_path):
-        try:
-            # Parse the Excel file
-            result = parse_excel_file(last_upload.file_path)
-            
-            if result['success']:
-                context['data'] = result['data']
-                context['errors'] = result['errors']
-                context['warnings'] = result['warnings']
-                context['file_info'] = {
-                    'filename': os.path.basename(last_upload.file_path),
-                    'uploaded_at': last_upload.uploaded_at,
-                }
-                # Run alerts engine
-                context['alerts'] = run_alerts(result['data'])
-                # Capture monthly snapshot
-                _capture_snapshot(result['data'])
-                # History for sparkline
-                context['snapshots'] = list(
+    if not last_upload or not os.path.exists(last_upload.file_path):
+        messages.info(request, "Upload an Excel file to view your dashboard.")
+        return render(request, "dashboard/dashboard.html", context)
+
+    try:
+        result = parse_excel_file(last_upload.file_path)
+        if result["success"]:
+            data = result["data"]
+            context.update({
+                "portfolio": build_portfolio(data),
+                "file_info": {
+                    "filename":    os.path.basename(last_upload.file_path),
+                    "uploaded_at": last_upload.uploaded_at,
+                },
+                "alerts":   run_alerts(data),
+                "errors":   result["errors"],
+                "warnings": result["warnings"],
+                "snapshots": list(
                     NetWorthSnapshot.objects.values(
-                        'month', 'total_net_worth', 'mutual_funds',
-                        'retirement', 'liquid', 'emergency_fund', 'metals'
-                    ).order_by('month')
-                )
-            else:
-                messages.error(request, 'Failed to parse Excel file')
-                context['errors'] = result.get('errors', ['Unknown error'])
-                
-        except ExcelParserError as e:
-            messages.error(request, f'Error: {str(e)}')
-            context['errors'].append(str(e))
-        except Exception as e:
-            messages.error(request, f'Unexpected error: {str(e)}')
-            context['errors'].append(str(e))
-    else:
-        messages.info(request, 'No Excel file uploaded yet. Please upload a file to get started.')
-    
-    return render(request, 'dashboard/dashboard.html', context)
+                        "month", "total_net_worth", "mutual_funds",
+                        "retirement", "liquid", "emergency_fund", "metals",
+                    ).order_by("month")
+                ),
+            })
+            _upsert_snapshot(data)
+        else:
+            context["errors"] = result.get("errors", ["Unknown parse error"])
+
+    except ExcelParserError as exc:
+        context["errors"].append(str(exc))
+    except Exception as exc:
+        context["errors"].append(f"Unexpected error: {exc}")
+
+    return render(request, "dashboard/dashboard.html", context)
 
 
 def upload_file(request):
-    """
-    Handle file upload
-    Accepts Excel file upload and stores the file path
-    """
-    if request.method == 'POST' and request.FILES.get('excel_file'):
-        excel_file = request.FILES['excel_file']
-        
-        # Validate file extension
-        if not excel_file.name.endswith('.xlsx'):
-            messages.error(request, 'Please upload a valid .xlsx file')
-            return redirect('dashboard')
-        
-        try:
-            # Save the uploaded file
-            fs = FileSystemStorage(location=settings.MEDIA_ROOT)
-            
-            # Delete old file if exists
-            if FileUploadHistory.objects.exists():
-                last_upload = FileUploadHistory.objects.first()
-                if os.path.exists(last_upload.file_path):
-                    try:
-                        os.remove(last_upload.file_path)
-                    except:
-                        pass
-            
-            filename = fs.save(excel_file.name, excel_file)
-            file_path = os.path.join(settings.MEDIA_ROOT, filename)
-            
-            # Save to history (clear old entries)
-            FileUploadHistory.objects.all().delete()
-            FileUploadHistory.objects.create(file_path=file_path)
-            
-            messages.success(request, f'File "{excel_file.name}" uploaded successfully!')
-            
-        except Exception as e:
-            messages.error(request, f'Error uploading file: {str(e)}')
-    
-    return redirect('dashboard')
+    if request.method != "POST" or not request.FILES.get("excel_file"):
+        return redirect("dashboard")
+
+    excel_file = request.FILES["excel_file"]
+    if not excel_file.name.lower().endswith(".xlsx"):
+        messages.error(request, "Please upload a valid .xlsx file.")
+        return redirect("dashboard")
+
+    try:
+        fs = FileSystemStorage(location=settings.MEDIA_ROOT)
+        old = FileUploadHistory.objects.first()
+        if old and os.path.exists(old.file_path):
+            try:
+                os.remove(old.file_path)
+            except OSError:
+                pass
+
+        filename  = fs.save(excel_file.name, excel_file)
+        file_path = os.path.join(settings.MEDIA_ROOT, filename)
+        FileUploadHistory.objects.all().delete()
+        FileUploadHistory.objects.create(file_path=file_path)
+        messages.success(request, f'"{excel_file.name}" loaded successfully.')
+    except Exception as exc:
+        messages.error(request, f"Upload error: {exc}")
+
+    return redirect("dashboard")
 
 
 def update_metal_prices(request):
-    """
-    Handle manual metal price override or force-refresh.
-    POST: gold_price, silver_price → store as manual
-    GET with ?refresh=1 → force live fetch
-    """
-    if request.method == 'POST':
+    """POST: manual override.  GET ?refresh=1: force live re-fetch."""
+    if request.method == "POST":
         updated = []
-        for metal in ['gold', 'silver']:
-            raw = request.POST.get(f'{metal}_price', '').strip()
+        for metal in ("gold", "silver"):
+            raw = request.POST.get(f"{metal}_price", "").strip()
             if raw:
                 try:
                     price = float(raw)
                     if set_manual_price(metal, price):
-                        updated.append(f'{metal.capitalize()}: ₹{price:.0f}/g')
+                        updated.append(f"{metal.capitalize()} ₹{price:,.0f}/g")
                 except ValueError:
-                    messages.error(request, f'Invalid price for {metal}: {raw}')
-
+                    messages.error(request, f"Invalid price for {metal}: {raw}")
         if updated:
-            messages.success(request, f'Prices updated → {", ".join(updated)}')
-        return redirect('dashboard')
+            messages.success(request, "Prices saved → " + ", ".join(updated))
+        return redirect("dashboard")
 
-    if request.GET.get('refresh') == '1':
+    if request.GET.get("refresh") == "1":
         prices = refresh_prices()
-        gold_p, gold_src = prices.get('gold', (0, 'N/A'))
-        silver_p, silver_src = prices.get('silver', (0, 'N/A'))
+        g, gs = prices.get("gold",   (0, "N/A"))
+        s, ss = prices.get("silver", (0, "N/A"))
         messages.success(
             request,
-            f'Prices refreshed — Gold: ₹{gold_p:.0f}/g ({gold_src}) | '
-            f'Silver: ₹{silver_p:.0f}/g ({silver_src})'
+            f"Prices refreshed — Gold ₹{g:,.0f}/g ({gs}) · Silver ₹{s:,.0f}/g ({ss})",
         )
-        return redirect('dashboard')
 
-    return redirect('dashboard')
+    return redirect("dashboard")
+
