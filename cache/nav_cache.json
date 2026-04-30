@@ -1,44 +1,8 @@
 {
-  "120503": {
-    "nav": 105.6212,
-    "date": "2026-04-29",
-    "timestamp": "2026-04-29T23:32:09.081438",
-    "fund_name": "HDFC Top 100 Fund"
-  },
-  "120518": {
-    "nav": 285.87,
-    "date": "2026-04-29",
-    "timestamp": "2026-04-29T23:32:09.752730",
-    "fund_name": "SBI Blue Chip Fund"
-  },
-  "120586": {
-    "nav": 117.92,
-    "date": "2026-04-29",
-    "timestamp": "2026-04-29T23:32:10.442269",
-    "fund_name": "ICICI Prudential Technology Fund"
-  },
-  "120505": {
-    "nav": 135.12,
-    "date": "2026-04-29",
-    "timestamp": "2026-04-29T23:32:11.059337",
-    "fund_name": "Axis Mid Cap Fund"
-  },
-  "118989": {
-    "nav": 220.217,
-    "date": "2026-04-29",
-    "timestamp": "2026-04-29T23:32:11.563422",
-    "fund_name": "Nippon India Small Cap Fund"
-  },
-  "120717": {
-    "nav": 84.5255,
-    "date": "30-Apr-2026",
-    "scheme_name": "UTI Nifty 50 Index Fund - Direct Plan - IDCW",
-    "timestamp": "2026-04-30T22:58:00.666169"
-  },
-  "120716": {
-    "nav": 167.7711,
-    "date": "30-Apr-2026",
-    "scheme_name": "UTI Nifty 50 Index Fund - Growth Option- Direct",
-    "timestamp": "2026-04-30T23:06:59.271659"
+  "INF179K01VQ8": {
+    "nav": 61.0,
+    "date": "28-Apr-2026",
+    "scheme_name": "Kotak Bond",
+    "timestamp": "2026-04-29T18:02:52.688499"
   }
 }

@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import tempfile
@@ -40,22 +41,29 @@ def _build_excel_file() -> str:
     return tmp.name
 
 
+@contextlib.contextmanager
+def _fake_open_google_sheet(gsheet_path):
+    """Context manager that yields a stable copy path, simulating open_google_sheet."""
+    yield gsheet_path
+
+
 @pytest.mark.django_db
 class TestGoogleSheetIntegration:
-    def test_google_sheet_load_success(self):
+    def test_google_sheet_load_success(self, tmp_path, settings):
+        settings.MEDIA_ROOT = str(tmp_path)
         gsheet_path = _build_excel_file()
         try:
             request = RequestFactory().post("/load-google-sheet/", {"sheet_url": "https://docs.google.com/spreadsheets/d/abc123/edit"})
             setattr(request, "session", {})
             setattr(request, "_messages", FallbackStorage(request))
-            with patch("dashboard.views.fetch_google_sheet", return_value=gsheet_path):
+            with patch("dashboard.views.open_google_sheet", return_value=_fake_open_google_sheet(gsheet_path)):
                 resp = load_google_sheet(request)
             assert resp.status_code == 302
             msg_text = [m.message for m in get_messages(request)]
             assert "Google Sheet loaded successfully." in msg_text
             last = FileUploadHistory.objects.first()
             assert last is not None
-            assert last.file_path == gsheet_path
+            assert "latest_gsheet.xlsx" in last.file_path
         finally:
             if os.path.exists(gsheet_path):
                 os.unlink(gsheet_path)
@@ -64,7 +72,7 @@ class TestGoogleSheetIntegration:
         request = RequestFactory().post("/load-google-sheet/", {"sheet_url": "bad"})
         setattr(request, "session", {})
         setattr(request, "_messages", FallbackStorage(request))
-        with patch("dashboard.views.fetch_google_sheet", side_effect=InvalidGoogleSheetUrl("bad url")):
+        with patch("dashboard.views.open_google_sheet", side_effect=InvalidGoogleSheetUrl("bad url")):
             resp = load_google_sheet(request)
         assert resp.status_code == 302
         assert "Invalid Google Sheet URL" in [m.message for m in get_messages(request)]
@@ -73,7 +81,7 @@ class TestGoogleSheetIntegration:
         request = RequestFactory().post("/load-google-sheet/", {"sheet_url": "https://docs.google.com/spreadsheets/d/private/edit"})
         setattr(request, "session", {})
         setattr(request, "_messages", FallbackStorage(request))
-        with patch("dashboard.views.fetch_google_sheet", side_effect=GoogleSheetAccessError("private")):
+        with patch("dashboard.views.open_google_sheet", side_effect=GoogleSheetAccessError("private")):
             resp = load_google_sheet(request)
         assert resp.status_code == 302
         assert "Sheet not publicly accessible" in [m.message for m in get_messages(request)]

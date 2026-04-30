@@ -6,3 +6,11 @@ beautifulsoup4>=4.12.0
 lxml>=5.0.0
 pytest>=8.0.0
 pytest-django>=4.8.0
+
+# Private Google Sheet support (install when deploying to Lambda)
+# google-auth>=2.0.0
+# google-auth-httplib2>=0.2.0
+# google-api-python-client>=2.0.0
+
+# Lambda packaging
+# zappa>=0.59.0

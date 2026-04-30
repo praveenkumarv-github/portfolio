@@ -1,0 +1,56 @@
+{
+  "production": {
+    "app_function": "finance_dashboard.wsgi_lambda.application",
+    "aws_region": "ap-south-1",
+
+    // ── Fill from `terraform output` after Phase 1 apply ───────────────
+    "s3_bucket": "REPLACE_WITH_TF_OUTPUT_s3_bucket",
+    "role_arn":  "REPLACE_WITH_TF_OUTPUT_lambda_role_arn",
+
+    "runtime":         "python3.11",
+    "timeout_seconds": 30,
+    "memory_size":     512,
+
+    "django_settings": "finance_dashboard.settings_lambda",
+
+    // ── Env vars injected into Lambda at deploy time ────────────────────
+    // GOOGLE_SERVICE_ACCOUNT_JSON: single-line JSON output of:
+    //   python -c "import json,sys; print(json.dumps(json.load(open('key.json'))))"
+    "environment_variables": {
+      "DJANGO_SETTINGS_MODULE":      "finance_dashboard.settings_lambda",
+      "DJANGO_SECRET_KEY":           "REPLACE_WITH_STRONG_SECRET",
+      "ALLOWED_HOSTS":               "finance.yourdomain.com",
+      "GOOGLE_SERVICE_ACCOUNT_JSON": "REPLACE_WITH_SERVICE_ACCOUNT_JSON_SINGLE_LINE"
+    },
+
+    // ── Files to exclude from the Lambda zip ───────────────────────────
+    "exclude": [
+      ".git",
+      ".gitignore",
+      ".env",
+      "**/__pycache__",
+      "**/*.pyc",
+      "tests/",
+      "venv/",
+      ".pytest_cache/",
+      "*.md",
+      "infra/",
+      "cache/",
+      "data/",
+      "media/",
+      "db.sqlite3",
+      "*.xlsx",
+      "key.json"
+    ],
+
+    // ── Zappa behavior ──────────────────────────────────────────────────
+    "slim_handler":     true,
+    "keep_warm":        false,
+    "use_precompiled_packages": true,
+
+    // ── Custom domain wiring (after Phase 2 terraform apply) ───────────
+    // Uncomment once Terraform phase 2 is done:
+    // "domain": "finance.yourdomain.com",
+    // "certificate_arn": "REPLACE_WITH_TF_OUTPUT_acm_certificate_arn"
+  }
+}

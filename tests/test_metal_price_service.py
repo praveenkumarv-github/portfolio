@@ -46,11 +46,13 @@ def _make_goodreturns_html_no_table(price_str: str) -> str:
 
 @pytest.fixture()
 def tmp_cache(tmp_path, monkeypatch):
-    """Redirect CACHE_FILE to a temp path for each test."""
+    """Redirect cache to a temp path for each test."""
     import dashboard.services.metal_price_service as svc
     cache_path = tmp_path / "metal_prices.json"
     monkeypatch.setattr(svc, "CACHE_FILE", str(cache_path))
     monkeypatch.setattr(svc, "CACHE_DIR",  str(tmp_path))
+    monkeypatch.setattr(svc, "_MEM_CACHE", {})
+    monkeypatch.setattr(svc, "_resolve_cache_path", lambda: str(cache_path))
     yield cache_path
 
 
@@ -237,6 +239,8 @@ class TestMetalCacheCorruption:
         cache_path.write_text("{broken json", encoding="utf-8")
         monkeypatch.setattr(svc, "CACHE_FILE", str(cache_path))
         monkeypatch.setattr(svc, "CACHE_DIR", str(tmp_path))
+        monkeypatch.setattr(svc, "_MEM_CACHE", {})
+        monkeypatch.setattr(svc, "_resolve_cache_path", lambda: str(cache_path))
 
         with patch("dashboard.services.metal_price_service._fetch_live", return_value={}):
             price, src = svc.get_metal_price("gold")

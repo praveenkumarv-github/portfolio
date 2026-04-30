@@ -15,6 +15,7 @@ from .services.google_sheet_service import (
     GoogleSheetError,
     InvalidGoogleSheetUrl,
     fetch_google_sheet,
+    open_google_sheet,
 )
 from .services.aggregator import build_dashboard_context, clear_dashboard_cache
 from .services.metal_price_service import (
@@ -29,7 +30,8 @@ from .services.metal_price_service import (
 
 
 def _is_google_temp_file(file_path: str) -> bool:
-    return os.path.basename(file_path).startswith("gsheet_") and file_path.lower().endswith(".xlsx")
+    name = os.path.basename(file_path)
+    return name.startswith("gsheet_") or name == "latest_gsheet.xlsx"
 
 
 def _delete_previous_loaded_file() -> None:
@@ -107,10 +109,18 @@ def load_google_sheet(request):
         return redirect("dashboard")
 
     try:
-        temp_file_path = fetch_google_sheet(sheet_url)
+        # open_google_sheet guarantees /tmp file is deleted after use
+        with open_google_sheet(sheet_url) as temp_path:
+            # Persist a stable copy so the dashboard can re-render on reload
+            import shutil
+            stable_dir = os.path.join(settings.MEDIA_ROOT, "gsheets")
+            os.makedirs(stable_dir, exist_ok=True)
+            stable_path = os.path.join(stable_dir, "latest_gsheet.xlsx")
+            shutil.copy2(temp_path, stable_path)
+
         _delete_previous_loaded_file()
         FileUploadHistory.objects.all().delete()
-        FileUploadHistory.objects.create(file_path=temp_file_path)
+        FileUploadHistory.objects.create(file_path=stable_path)
         clear_dashboard_cache()
         messages.success(request, "Google Sheet loaded successfully.")
     except InvalidGoogleSheetUrl:

@@ -27,15 +27,31 @@ from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Paths
-_SERVICE_DIR  = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.normpath(os.path.join(_SERVICE_DIR, "..", ".."))
-_CACHE_DIR    = os.path.join(_PROJECT_ROOT, "cache")
-_NAV_CACHE    = os.path.join(_CACHE_DIR, "nav_cache.json")
+# ---------------------------------------------------------------------------
+# Cache path — Lambda writes only to /tmp; local dev uses project cache/
+# ---------------------------------------------------------------------------
+def _resolve_cache_path() -> str:
+    """
+    Return a writable cache path.
+    Lambda:    /tmp/cache/nav_cache.json  (always writable)
+    Local dev: <project_root>/cache/nav_cache.json
+    """
+    if os.path.isdir("/tmp"):
+        d = "/tmp/cache"
+    else:
+        _svc = os.path.dirname(os.path.abspath(__file__))
+        d = os.path.normpath(os.path.join(_svc, "..", "..", "cache"))
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "nav_cache.json")
 
-_AMFI_URL     = "https://www.amfiindia.com/spages/NAVAll.txt"
-_MFAPI_URL    = "https://api.mfapi.in/mf/{}"
-_CACHE_TTL_H  = 24   # hours
+
+_NAV_CACHE   = _resolve_cache_path()
+_AMFI_URL    = "https://www.amfiindia.com/spages/NAVAll.txt"
+_MFAPI_URL   = "https://api.mfapi.in/mf/{}"
+_CACHE_TTL_H = 24   # hours
+
+# In-memory fallback when file I/O is unavailable
+_MEM_CACHE: Dict = {}
 
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; FinanceDashboard/1.0)",
@@ -52,25 +68,28 @@ def _now_iso() -> str:
 
 def _read_cache() -> Dict:
     try:
-        if os.path.exists(_NAV_CACHE):
-            with open(_NAV_CACHE, "r", encoding="utf-8") as fh:
+        cache_path = _resolve_cache_path()
+        if os.path.exists(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
             if isinstance(data, dict):
                 return data
     except Exception as exc:
-        logger.warning("[NAVService] cache read error: %s", exc)
-    return {}
+        logger.warning("[NAVService] cache read error: %s — using memory cache", exc)
+    return dict(_MEM_CACHE)  # fallback to in-memory
 
 
 def _write_cache(data: Dict) -> None:
+    global _MEM_CACHE
+    _MEM_CACHE = dict(data)  # always keep memory copy
     try:
-        os.makedirs(_CACHE_DIR, exist_ok=True)
-        tmp = _NAV_CACHE + ".tmp"
+        cache_path = _resolve_cache_path()
+        tmp = cache_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
-        os.replace(tmp, _NAV_CACHE)
+        os.replace(tmp, cache_path)
     except Exception as exc:
-        logger.warning("[NAVService] cache write error: %s", exc)
+        logger.warning("[NAVService] cache write error: %s — data in memory only", exc)
 
 
 def _cache_valid(entry: Dict) -> bool:
@@ -162,7 +181,7 @@ def _fetch_amfi_index() -> Optional[Dict[str, Dict]]:
     """Download NAVAll.txt and return parsed index, or None on failure."""
     try:
         import requests as req
-        resp = req.get(_AMFI_URL, headers=_HEADERS, timeout=15)
+        resp = req.get(_AMFI_URL, headers=_HEADERS, timeout=3)
         resp.raise_for_status()
         # AMFI file is latin-1 encoded
         text = resp.content.decode("latin-1")
@@ -189,7 +208,7 @@ def _fetch_mfapi(code: str) -> Optional[Tuple[float, str, str]]:
         return None
     try:
         import requests as req
-        resp = req.get(_MFAPI_URL.format(code.strip()), headers=_HEADERS, timeout=8)
+        resp = req.get(_MFAPI_URL.format(code.strip()), headers=_HEADERS, timeout=3)
         if resp.status_code != 200:
             return None
         data = resp.json()

@@ -23,11 +23,29 @@ from typing import Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Paths
-_SERVICE_DIR  = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.normpath(os.path.join(_SERVICE_DIR, ".." , ".."))
-CACHE_FILE    = os.path.join(_PROJECT_ROOT, "data", "metal_prices.json")
-CACHE_DIR     = os.path.dirname(CACHE_FILE)
+# ---------------------------------------------------------------------------
+# Cache path — Lambda writes only to /tmp; local dev uses project data/
+# ---------------------------------------------------------------------------
+def _resolve_cache_path() -> str:
+    """
+    Return a writable cache path.
+    Lambda:    /tmp/cache/metal_prices.json
+    Local dev: <project_root>/data/metal_prices.json
+    """
+    if os.path.isdir("/tmp"):
+        d = "/tmp/cache"
+    else:
+        _svc = os.path.dirname(os.path.abspath(__file__))
+        d = os.path.normpath(os.path.join(_svc, "..", "..", "data"))
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "metal_prices.json")
+
+
+CACHE_FILE = _resolve_cache_path()   # kept for backward-compat with tests
+CACHE_DIR  = os.path.dirname(CACHE_FILE)
+
+# In-memory fallback when file I/O is unavailable
+_MEM_CACHE: Dict = {}
 
 # Sanity bounds (INR/gram)
 _BOUNDS = {
@@ -65,25 +83,28 @@ def _today() -> str:
 
 def _read_cache() -> Dict:
     try:
-        if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r", encoding="utf-8") as fh:
+        cache_path = _resolve_cache_path()
+        if os.path.exists(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
             if isinstance(data, dict):
                 return data
     except Exception as exc:
-        logger.warning("[MetalPrice] cache read error: %s", exc)
-    return {}
+        logger.warning("[MetalPrice] cache read error: %s — using memory cache", exc)
+    return dict(_MEM_CACHE)
 
 
 def _write_cache(data: Dict) -> None:
+    global _MEM_CACHE
+    _MEM_CACHE = dict(data)  # always keep memory copy
     try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        tmp = CACHE_FILE + ".tmp"
+        cache_path = _resolve_cache_path()
+        tmp = cache_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(data, fh, indent=2)
-        os.replace(tmp, CACHE_FILE)
+        os.replace(tmp, cache_path)
     except Exception as exc:
-        logger.warning("[MetalPrice] cache write error: %s", exc)
+        logger.warning("[MetalPrice] cache write error: %s — data in memory only", exc)
 
 
 def _is_fresh(entry: Dict) -> bool:
@@ -177,7 +198,7 @@ def _scrape(url: str, metal: str) -> Optional[float]:
     try:
         import requests as req
         from bs4 import BeautifulSoup
-        resp = req.get(url, headers=_HEADERS, timeout=12)
+        resp = req.get(url, headers=_HEADERS, timeout=3)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
         price = _extract_1gram_price(soup, metal)
