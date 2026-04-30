@@ -227,3 +227,19 @@ class TestManualOverride:
         gold_price, gold_src = prices["gold"]
         assert gold_price == 9500.0
         assert "Manual" in gold_src
+
+
+class TestMetalCacheCorruption:
+    def test_corrupt_cache_json_is_ignored(self, tmp_path, monkeypatch):
+        import dashboard.services.metal_price_service as svc
+
+        cache_path = tmp_path / "metal_prices.json"
+        cache_path.write_text("{broken json", encoding="utf-8")
+        monkeypatch.setattr(svc, "CACHE_FILE", str(cache_path))
+        monkeypatch.setattr(svc, "CACHE_DIR", str(tmp_path))
+
+        with patch("dashboard.services.metal_price_service._fetch_live", return_value={}):
+            price, src = svc.get_metal_price("gold")
+
+        assert price == svc._SAFE_DEFAULTS["gold"]
+        assert "Default" in src

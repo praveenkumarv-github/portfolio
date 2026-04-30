@@ -212,3 +212,22 @@ class TestGetNAV:
                 nav, src = get_nav("INF179K01VQ8")
         assert nav == pytest.approx(61.0)
         assert "offline" in src.lower() or "cached" in src.lower()
+
+
+class TestNavCacheCorruption:
+    def test_corrupt_cache_json_is_ignored(self, tmp_path, monkeypatch):
+        import dashboard.services.nav_service as svc
+
+        cache_path = tmp_path / "nav_cache.json"
+        cache_path.write_text("{broken json", encoding="utf-8")
+
+        monkeypatch.setattr(svc, "_NAV_CACHE", str(cache_path))
+        monkeypatch.setattr(svc, "_amfi_index", None)
+        monkeypatch.setattr(svc, "_amfi_loaded_at", None)
+
+        with patch("dashboard.services.nav_service._get_amfi_index", return_value={}):
+            with patch("dashboard.services.nav_service._fetch_mfapi", return_value=None):
+                nav, src = svc.get_nav("INVALID")
+
+        assert nav == 0.0
+        assert "Not Available" in src

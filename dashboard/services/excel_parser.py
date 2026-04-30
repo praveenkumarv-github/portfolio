@@ -51,9 +51,6 @@ class ExcelParser:
             self._parse_emergency_fund()
             self._parse_insurance()
             self._parse_metals()
-            
-            # Calculate aggregates
-            self._calculate_metrics()
 
             return {
                 'success': True,
@@ -112,6 +109,9 @@ class ExcelParser:
             identifier = str(row['Identifier']).strip()
             fund_name = str(row['FundName']).strip()
             units = float(row['Units'])
+            fund_type = ""
+            if 'Type' in df.columns and pd.notna(row.get('Type')):
+                fund_type = str(row.get('Type')).strip()
             
             # Fetch NAV
             nav, nav_source = self.nav_service.get_nav(identifier, fund_name)
@@ -127,6 +127,7 @@ class ExcelParser:
             funds.append({
                 'fund_name': fund_name,
                 'identifier': identifier,
+                'fund_type': fund_type,
                 'units': float(units),
                 'nav': float(nav) if nav else 0,
                 'nav_source': nav_source,
@@ -347,31 +348,6 @@ class ExcelParser:
         
         self.data['metals'] = metals
         self.data['metals_total'] = float(total_value)
-    
-    def _calculate_metrics(self):
-        """Calculate global metrics"""
-        total_investments = (
-            self.data.get('mutual_funds_summary', {}).get('total_current_value', 0) +
-            self.data.get('retirement_total', 0)
-        )
-        
-        total_net_worth = (
-            total_investments +
-            self.data.get('liquid_total', 0) +
-            self.data.get('emergency_fund_total', 0) +
-            self.data.get('metals_total', 0)
-        )
-        
-        self.data['global_metrics'] = {
-            'total_net_worth': float(total_net_worth),
-            'total_investments': float(total_investments),
-            'total_emergency_fund': float(self.data.get('emergency_fund_total', 0)),
-            'total_insurance_coverage': float(
-                self.data.get('insurance_summary', {}).get('total_coverage', 0)
-            ),
-            'total_liquid': float(self.data.get('liquid_total', 0)),
-            'total_metals': float(self.data.get('metals_total', 0)),
-        }
 
 
 def parse_excel_file(file_path: str) -> Dict[str, Any]:

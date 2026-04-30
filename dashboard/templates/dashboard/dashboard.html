@@ -3,728 +3,191 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Finance Cockpit</title>
+<title>Personal Finance Cockpit</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0b0d18;--surf:#111422;--card:#161929;--border:#1e2438;
-  --accent:#4f8ef7;--purple:#7c5cf6;--green:#2dd4a0;--red:#f06b6b;
-  --gold:#e8b44a;--silver:#90a8be;--orange:#f59e42;
-  --text:#dde3f0;--sub:#7a85a3;--label:#5a6380;--radius:8px;
-  --font:'Inter',system-ui,-apple-system,sans-serif;
-}
-html{font-size:13px}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
-a{text-decoration:none;color:inherit}
-input,button{font-family:inherit}
+:root{--bg:#f6f7fb;--panel:#fff;--line:#e8eaf2;--line2:#eef0f8;--txt:#1f2433;--muted:#6d7590;--accent:#2f6fed;--ok:#129e60;--warn:#b07c00;--bad:#c54848;--shadow:0 8px 24px rgba(20,28,45,.05)}
+body{font-family:'Segoe UI',-apple-system,sans-serif;background:var(--bg);color:var(--txt);font-size:13px;line-height:1.34}
+.page{max-width:1480px;margin:0 auto;padding:12px 14px 24px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px;box-shadow:var(--shadow);margin-bottom:9px}
+.brand{font-size:22px;font-weight:800;letter-spacing:.2px}
+.meta{font-size:11px;color:var(--muted)}
+.actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;color:var(--txt)}
+.btn:hover{background:#f8f9fd}
+.btn-pr{background:var(--accent);border-color:var(--accent);color:#fff}
+input[type=file],input[type=number]{border:1px solid var(--line);border-radius:8px;padding:5px 7px;font-size:11px;background:#fff}
+input[type=file]{max-width:192px} input[type=number]{width:96px}
 
-/* TOPBAR */
-.topbar{background:var(--surf);border-bottom:1px solid var(--border);height:44px;padding:0 20px;
-  display:flex;align-items:center;justify-content:space-between;
-  position:sticky;top:0;z-index:200;box-shadow:0 1px 12px rgba(0,0,0,.4)}
-.topbar-left{display:flex;align-items:center;gap:10px}
-.topbar-logo{font-size:15px;font-weight:800;letter-spacing:.3px;
-  background:linear-gradient(90deg,#6ba3fb,#9d78f9);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.topbar-file{font-size:11px;color:var(--sub);padding:3px 8px;
-  background:var(--card);border:1px solid var(--border);border-radius:4px}
-.topbar-right{display:flex;align-items:center;gap:6px}
+.notices{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.msg{padding:7px 10px;border:1px solid;border-radius:8px;font-size:11px}
+.msg.success{background:#edfbf3;border-color:#bcebd0;color:#106c42}.msg.error{background:#fff1f1;border-color:#f4cccc;color:#9f2e2e}.msg.warning{background:#fff8e7;border-color:#f3dfaa;color:#7f5a00}.msg.info{background:#eef4ff;border-color:#ccdcff;color:#2d5bb4}
 
-/* BUTTONS */
-.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;
-  border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;
-  transition:filter .12s,transform .12s;letter-spacing:.2px;white-space:nowrap}
-.btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-ghost{background:var(--border);color:var(--sub)}
-.btn-ghost:hover{color:var(--text)}
-.btn-gold{background:linear-gradient(135deg,#b8740c,#e8b44a);color:#1a0f00}
-.btn-sm{padding:4px 9px;font-size:10px}
+.snapshot{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:var(--shadow);margin-bottom:8px;display:grid;grid-template-columns:3fr 2fr;gap:10px}
+@media(max-width:1150px){.snapshot{grid-template-columns:1fr}}
+.leftpane{display:flex;flex-direction:column;gap:8px}
+.hero{border:1px solid var(--line2);border-radius:10px;background:#fbfcff;padding:10px}
+.hero .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+.hero .nw{font-size:44px;line-height:1;font-weight:900;letter-spacing:-.9px;margin-top:4px}
+.hero .sub{font-size:11px;color:var(--muted);margin-top:4px}
 
-/* LAYOUT */
-.page{max-width:1480px;margin:0 auto;padding:14px 20px 48px}
+.asset-table{border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.asset-row{display:grid;grid-template-columns:1.35fr .8fr .4fr;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line2);align-items:center}
+.asset-row:last-child{border-bottom:none}
+.asset-row.h{background:#f8f9fd;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.asset-row .v,.asset-row .p{text-align:right;font-variant-numeric:tabular-nums}
+.asset-row .n{font-weight:700}.asset-row .m{font-size:10px;color:var(--muted)}
 
-/* TOAST */
-.toast-row{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
-.toast{padding:8px 12px;border-radius:5px;font-size:11px;border-left:3px solid;
-  display:flex;align-items:flex-start;gap:8px}
-.toast-success{background:#041c10;color:#4ade80;border-color:#16a34a}
-.toast-error  {background:#1e0909;color:#fca5a5;border-color:#dc2626}
-.toast-warning{background:#1a1300;color:#fcd34d;border-color:#ca8a04}
-.toast-info   {background:#08122a;color:#7eb4fb;border-color:var(--accent)}
+.risk{border:1px solid #ece9fb;border-radius:10px;overflow:hidden}
+.risk-head{padding:7px 10px;background:#f8f6ff;color:#5a46a0;border-bottom:1px solid #ece9fb;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.rrow{display:grid;grid-template-columns:1fr .75fr .75fr .6fr;gap:8px;padding:6px 10px;border-bottom:1px solid #f1effb;align-items:center}
+.rrow:last-child{border-bottom:none}.rrow.h{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;background:#fbfaff}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;border:1px solid}
+.badge.ok{color:#0f7d4c;background:#e8f9f0;border-color:#b7e5ca}.badge.warn{color:#8f6200;background:#fff5dc;border-color:#eed28f}.badge.error{color:#9b2e2e;background:#ffe9e9;border-color:#f1b8b8}
 
-/* ALERT STRIP */
-.alert-strip{background:rgba(248,183,74,.07);border:1px solid rgba(248,183,74,.2);
-  border-radius:6px;padding:7px 14px;margin-bottom:10px;font-size:11px;color:#fcd34d;
-  display:flex;align-items:center;gap:8px}
-.alert-strip.error{background:rgba(240,107,107,.07);border-color:rgba(240,107,107,.2);color:#fca5a5}
+.rightpane{border:1px solid var(--line2);border-radius:10px;padding:8px;background:#fff}
+.card-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 
-/* FILE INPUT */
-input[type=file]{background:var(--card);border:1px solid var(--border);border-radius:5px;
-  color:var(--sub);font-size:11px;padding:4px 8px;cursor:pointer}
-input[type=file]::file-selector-button{background:var(--border);color:var(--sub);border:none;
-  border-radius:3px;padding:3px 8px;font-size:10px;cursor:pointer;margin-right:6px}
-input[type=number]{background:var(--card);border:1px solid var(--border);border-radius:5px;
-  color:var(--text);font-size:11px;padding:5px 8px;outline:none;width:100px}
-input[type=number]:focus{border-color:var(--accent)}
+.compare-grid{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px}
+@media(max-width:1150px){.compare-grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:var(--shadow)}
+.ann{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tag{font-size:10px;border:1px solid var(--line2);background:#fafbff;border-radius:999px;padding:3px 8px;color:var(--muted)}
 
-/* HERO */
-.hero{background:linear-gradient(135deg,#0d1226 0%,#111635 55%,#100f2a 100%);
-  border:1px solid #1c2248;border-radius:10px;padding:18px 24px;
-  display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;
-  margin-bottom:12px;position:relative;overflow:hidden}
-.hero::after{content:'';position:absolute;top:-80px;right:-80px;width:300px;height:300px;
-  background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 65%);pointer-events:none}
-.hero-nw .lbl{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:var(--sub);margin-bottom:3px}
-.hero-nw .val{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;
-  background:linear-gradient(90deg,#7eb4fb,#b09dfb);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-nw .sub{font-size:10px;color:var(--label);margin-top:4px}
-.hero-stats{display:flex;gap:20px}
-.hs .sl{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--sub)}
-.hs .sv{font-size:16px;font-weight:700;margin-top:2px;text-align:right}
-.sv.green{color:var(--green)}.sv.gold{color:var(--gold)}.sv.blue{color:var(--accent)}
+.blades{display:flex;flex-direction:column;gap:8px}
+.blade{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.blade-head{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:9px 10px;cursor:pointer}
+.blade-head:hover{background:#fafbff}
+.blade-name{font-weight:700;font-size:12px}.blade-val{font-variant-numeric:tabular-nums;font-weight:700}.chev{font-size:10px;color:var(--muted);transition:transform .15s}
+.blade-body{display:none;border-top:1px solid var(--line2)}.blade-body.open{display:block}
+.blade-layout{display:grid;grid-template-columns:260px 1fr;gap:0;align-items:stretch}
+.blade-layout.mf-layout{grid-template-columns:280px 1fr}
+.blade-layout .side{border-right:1px solid var(--line2);padding:8px 8px 10px;background:#fbfcff}
+.blade-layout .stack{display:flex;flex-direction:column;gap:8px}
+.mini-panel{border:1px solid var(--line2);border-radius:10px;padding:6px;background:#fff}
+.mini-panel .mini-title{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.blade-chart{display:flex;justify-content:center;align-items:center}
+.tblwrap{padding:8px 10px 10px}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:6px;border-bottom:1px solid var(--line2)}
+.tbl td{padding:6px;border-bottom:1px solid var(--line2);font-size:11px}.tbl td.r,.tbl th.r{text-align:right;font-variant-numeric:tabular-nums}
+.tbl tr:last-child td{border-bottom:none}.tbl tfoot td{font-weight:700;background:#fafbff}
+.sub{font-size:10px;color:var(--muted)}
+.note{font-size:10px;color:var(--muted);margin-top:6px}
+.empty{background:var(--panel);border:1px dashed var(--line);border-radius:12px;padding:44px 14px;text-align:center;color:var(--muted)}
 
-/* MAIN GRID */
-.main-grid{display:grid;grid-template-columns:1fr 320px;gap:12px;align-items:start;margin-bottom:12px}
-@media(max-width:1100px){.main-grid{grid-template-columns:1fr}}
-
-/* SNAPSHOT PANEL */
-.snapshot-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.snap-header{display:flex;justify-content:space-between;align-items:center;
-  padding:9px 14px 8px;border-bottom:1px solid var(--border)}
-.snap-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--sub)}
-.snap-total{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
-
-.snap-row{display:grid;grid-template-columns:22px 1fr 90px 50px 50px;gap:0;
-  align-items:center;padding:6px 14px;border-bottom:1px solid #131726;
-  cursor:pointer;transition:background .1s}
-.snap-row:last-child{border-bottom:none}
-.snap-row:hover{background:rgba(255,255,255,.025)}
-.snap-icon{font-size:13px;text-align:center}
-.snap-name{font-size:12px;font-weight:600;color:var(--text)}
-.snap-meta{font-size:9px;color:var(--sub);margin-top:1px}
-.snap-val{text-align:right;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
-.snap-pct{text-align:right;font-size:10px;color:var(--sub)}
-.snap-indicator{text-align:right;padding-right:2px}
-
-.pct-bar-wrap{height:2px;background:var(--border);border-radius:2px;margin-top:3px;overflow:hidden}
-.pct-bar{height:2px;border-radius:2px;transition:width .4s ease}
-
-/* RISK PANEL inside snapshot */
-.risk-divider{padding:6px 14px 4px;background:rgba(124,92,246,.06);
-  border-top:1px solid rgba(124,92,246,.18);border-bottom:1px solid rgba(124,92,246,.18)}
-.risk-divider-lbl{font-size:9px;font-weight:700;text-transform:uppercase;
-  letter-spacing:1.2px;color:#9d78f9;display:flex;align-items:center;gap:6px}
-.risk-row{display:grid;grid-template-columns:22px 1fr 80px 60px 56px;
-  align-items:center;padding:5px 14px;border-bottom:1px solid #131726;gap:0}
-.risk-row:last-child{border-bottom:none}
-.risk-row:hover{background:rgba(255,255,255,.02)}
-.risk-type{font-size:11px;font-weight:600}
-.risk-prov{font-size:9px;color:var(--sub);margin-top:1px}
-.risk-val{text-align:right;font-size:11px;font-variant-numeric:tabular-nums;color:var(--green)}
-.risk-prem{text-align:right;font-size:10px;color:var(--sub);font-variant-numeric:tabular-nums}
-.risk-status{text-align:right}
-
-.snap-footer{padding:8px 14px;background:var(--surf);display:flex;justify-content:space-between;align-items:center}
-.snap-footer .sf-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.7px}
-.snap-footer .sf-val{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
-
-/* STATUS BADGES */
-.sbadge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:9px;font-weight:700;border:1px solid}
-.sbadge-ok   {background:#031a0a;color:#4ade80;border-color:#16a34a}
-.sbadge-warn {background:#160f00;color:#fcd34d;border-color:#a16207}
-.sbadge-error{background:#190505;color:#fca5a5;border-color:#b91c1c}
-
-/* DOT indicators */
-.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
-.dot-ok   {background:var(--green)}
-.dot-warn {background:var(--gold)}
-.dot-error{background:var(--red)}
-.dot-none {background:transparent}
-
-/* CHART COLUMN */
-.chart-col{display:flex;flex-direction:column;gap:12px}
-.chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
-.chart-card h3{font-size:10px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.9px;color:var(--sub);margin-bottom:10px}
-
-/* HISTORY */
-.history-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
-  padding:12px;margin-bottom:12px}
-.history-card h3{font-size:10px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.9px;color:var(--sub);margin-bottom:8px}
-
-/* SECTION LABEL */
-.section-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;
-  color:var(--label);display:flex;align-items:center;gap:8px;margin-bottom:8px;margin-top:16px}
-.section-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* BLADES */
-.blade{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
-  margin-bottom:7px;overflow:hidden}
-.blade-head{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;
-  user-select:none;transition:background .1s}
-.blade-head:hover{background:rgba(255,255,255,.03)}
-.blade-icon{font-size:14px;flex-shrink:0}
-.blade-name{font-weight:700;font-size:12px;flex:1}
-.blade-total{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;margin-right:8px}
-.blade-chevron{font-size:11px;color:var(--label);transition:transform .2s;flex-shrink:0}
-.blade-body{display:none;border-top:1px solid var(--border)}
-.blade-body.open{display:block}
-
-/* BLADE MINI-CHART */
-.blade-chart-wrap{padding:12px 14px 0;display:flex;justify-content:center}
-
-/* TABLES */
-.dt{width:100%;border-collapse:collapse}
-.dt th{padding:6px 14px;font-size:9px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.7px;color:var(--label);background:var(--surf);text-align:left;
-  border-bottom:1px solid var(--border)}
-.dt th.r{text-align:right}
-.dt td{padding:6px 14px;border-bottom:1px solid #131726;font-size:11px;vertical-align:middle}
-.dt td.r{text-align:right;font-variant-numeric:tabular-nums}
-.dt tr:last-child td{border-bottom:none}
-.dt tbody tr:hover{background:rgba(255,255,255,.02)}
-.dt .foot td{background:var(--surf);font-weight:700;font-size:12px;border-top:1px solid var(--border);border-bottom:none}
-.fn{font-weight:600;color:var(--text);font-size:11px}
-.fi{font-size:9px;color:var(--sub);font-family:'Courier New',monospace;margin-top:1px}
-
-/* METALS */
-.metal-blade{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #131726}
-.metal-blade:last-of-type{border-bottom:none}
-.metal-orb{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.metal-orb.gold{background:linear-gradient(135deg,#6b3e00,#c07f0a)}
-.metal-orb.silver{background:linear-gradient(135deg,#283540,#4a6878)}
-.metal-info .mn{font-size:12px;font-weight:700}
-.metal-info .mq{font-size:9px;color:var(--sub);margin-top:1px}
-.metal-right{margin-left:auto;text-align:right}
-.metal-right .mv{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
-.metal-right .mp{font-size:10px;color:var(--sub);margin-top:2px}
-.gold-t{color:var(--gold)}.silver-t{color:var(--silver)}
-
-/* PRICE FORM */
-.price-form{background:var(--surf);border-top:1px solid var(--border);padding:9px 14px;
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.pf-lbl{font-size:10px;font-weight:700;color:var(--sub);white-space:nowrap}
-.pf-field{display:flex;align-items:center;gap:5px}
-.pf-field label{font-size:10px;color:var(--label);white-space:nowrap}
-
-/* BADGES */
-.badge{display:inline-block;padding:1px 6px;border-radius:20px;font-size:9px;font-weight:700;letter-spacing:.3px;border:1px solid}
-.badge-live   {background:#021a0b;color:#4ade80;border-color:#15803d}
-.badge-cached {background:#080f22;color:#7eb4fb;border-color:#1e40af}
-.badge-manual {background:#1c1200;color:#fcd34d;border-color:#a16207}
-.badge-default{background:#140e22;color:#c4b5fd;border-color:#6d28d9}
-.badge-amfi   {background:#051820;color:#67e8f9;border-color:#0e7490}
-
-/* MISC */
-.num{font-variant-numeric:tabular-nums;font-family:'Courier New',monospace}
-.muted{color:var(--sub)}.green{color:var(--green)}.gold{color:var(--gold)}
-.silver{color:var(--silver)}.red{color:var(--red)}
-
-/* EMPTY */
-.empty{text-align:center;padding:80px 20px;display:flex;flex-direction:column;
-  align-items:center;gap:14px}
-.empty-ico{font-size:48px;opacity:.3}
-.empty h2{font-size:18px;color:var(--sub)}
-.empty p{font-size:13px;color:var(--label);max-width:360px}
-
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:var(--surf)}
-::-webkit-scrollbar-thumb{background:#1e2848;border-radius:3px}
+@media(max-width:900px){.topbar{flex-direction:column;align-items:flex-start}.asset-row{grid-template-columns:1fr .8fr .45fr}.rrow{grid-template-columns:1fr .8fr .8fr .7fr}.hero .nw{font-size:36px}.blade-layout,.blade-layout.mf-layout{grid-template-columns:1fr}.blade-layout .side{border-right:none;border-bottom:1px solid var(--line2)}}
 </style>
 </head>
 <body>
-
-<!-- TOPBAR -->
-<header class="topbar">
-  <div class="topbar-left">
-    <span class="topbar-logo">&#8377; COCKPIT</span>
-    {% if file_info %}
-    <span class="topbar-file">{{ file_info.filename }} &nbsp;&middot;&nbsp; {{ file_info.uploaded_at|date:"d M Y H:i" }}</span>
-    {% endif %}
-  </div>
-  <div class="topbar-right">
-    {% if file_info %}
-    <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost btn-sm">&#8635; Refresh Prices</a>
-    {% endif %}
-    <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:5px;align-items:center">
-      {% csrf_token %}
-      <input type="file" name="excel_file" accept=".xlsx" required style="max-width:160px">
-      <button type="submit" class="btn btn-primary btn-sm">&#8679; Load File</button>
-    </form>
-  </div>
-</header>
-
 <div class="page">
-
-{% if messages %}
-<div class="toast-row">
-  {% for msg in messages %}
-  <div class="toast toast-{{ msg.tags }}">
-    <span>{% if msg.tags == 'success' %}&#10003;{% elif msg.tags == 'error' %}&#9888;{% else %}&#8505;{% endif %}</span>
-    <div>{{ msg }}</div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% if errors %}
-<div class="toast-row">
-  {% for e in errors %}<div class="toast toast-error"><span>&#9888;</span><div>{{ e }}</div></div>{% endfor %}
-</div>
-{% endif %}
-
-{% for alert in alerts %}
-{% if alert.level == 'error' %}<div class="alert-strip error">&#9888;&nbsp; {{ alert.message }}</div>
-{% elif alert.level == 'warning' %}<div class="alert-strip">&#9888;&nbsp; {{ alert.message }}</div>
-{% endif %}
-{% endfor %}
-
-{% if portfolio %}
-
-<!-- HERO -->
-<div class="hero">
-  <div class="hero-nw">
-    <div class="lbl">Net Worth (Assets Only)</div>
-    <div class="val">&#8377;{{ portfolio.net_worth|floatformat:0 }}</div>
-    <div class="sub">{{ portfolio.categories|length }} asset categories &nbsp;&middot;&nbsp; {{ file_info.uploaded_at|date:"d M Y" }}</div>
-  </div>
-  <div class="hero-stats">
-    <div class="hs">
-      <div class="sl">Investments</div>
-      <div class="sv blue">&#8377;{{ portfolio.mf_total|floatformat:0 }}</div>
+  <div class="topbar">
+    <div>
+      <div class="brand">Personal Finance Cockpit</div>
+      {% if file_info %}<div class="meta">{{ file_info.filename }} | {{ file_info.uploaded_at|date:"d M Y H:i" }}</div>{% endif %}
     </div>
-    <div class="hs">
-      <div class="sl">Liquid + EF</div>
-      <div class="sv green">&#8377;{{ portfolio.liquid_plus_ef|floatformat:0 }}</div>
-    </div>
-    <div class="hs">
-      <div class="sl">Metals</div>
-      <div class="sv gold">&#8377;{{ portfolio.metals_total|floatformat:0 }}</div>
-    </div>
-  </div>
-</div>
-
-<!-- MAIN GRID -->
-<div class="main-grid">
-
-  <!-- LEFT: Snapshot + Risk -->
-  <div class="snapshot-panel">
-    <div class="snap-header">
-      <span class="snap-title">Asset Snapshot</span>
-      <span class="snap-total">&#8377;{{ portfolio.net_worth|floatformat:0 }}</span>
-    </div>
-
-    {% for cat in portfolio.categories %}
-    <div class="snap-row" onclick="toggleBlade('blade-{{ cat.key }}')">
-      <div class="snap-icon">{{ cat.icon }}</div>
-      <div>
-        <div class="snap-name">{{ cat.label }}</div>
-        <div class="snap-meta">{{ cat.meta }}</div>
-        <div class="pct-bar-wrap">
-          <div class="pct-bar" style="width:{{ cat.pct }}%;background:{% if cat.key == 'mutual_funds' %}#4f8ef7{% elif cat.key == 'retirement' %}#7c5cf6{% elif cat.key == 'liquid' %}#2dd4a0{% elif cat.key == 'emergency_fund' %}#f06b6b{% else %}#e8b44a{% endif %}"></div>
-        </div>
-      </div>
-      <div class="snap-val num">&#8377;{{ cat.value|floatformat:0 }}</div>
-      <div class="snap-pct">{{ cat.pct }}%</div>
-      <div class="snap-indicator">
-        {% if cat.alert_level == 'ok' %}<span class="dot dot-ok"></span>
-        {% elif cat.alert_level == 'warn' %}<span class="dot dot-warn"></span>
-        {% elif cat.alert_level == 'error' %}<span class="dot dot-error"></span>
-        {% else %}<span class="dot dot-none"></span>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
-
-    <div class="snap-footer">
-      <span class="sf-lbl">Total Net Worth</span>
-      <span class="sf-val num">&#8377;{{ portfolio.net_worth|floatformat:0 }}</span>
-    </div>
-
-    <!-- RISK MANAGEMENT SECTION -->
-    {% if portfolio.risk_rows %}
-    <div class="risk-divider">
-      <span class="risk-divider-lbl">&#128737; Risk Management &mdash; {{ portfolio.risk_summary.policy_count }} polic{% if portfolio.risk_summary.policy_count != 1 %}ies{% else %}y{% endif %}</span>
-    </div>
-    {% for r in portfolio.risk_rows %}
-    <div class="risk-row" onclick="toggleBlade('blade-insurance')">
-      <div style="font-size:13px;text-align:center">&#128737;</div>
-      <div>
-        <div class="risk-type">{{ r.type }}</div>
-        <div class="risk-prov">{{ r.provider }}</div>
-      </div>
-      <div class="risk-val num">&#8377;{{ r.coverage|floatformat:0 }}</div>
-      <div class="risk-prem num">&#8377;{{ r.premium|floatformat:0 }}/yr</div>
-      <div class="risk-status">
-        <span class="sbadge sbadge-{{ r.status_level }}">{{ r.status }}</span>
-      </div>
-    </div>
-    {% endfor %}
-    <div style="padding:6px 14px;background:var(--surf);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:.7px">Total Coverage</span>
-      <span style="font-size:13px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums">&#8377;{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- RIGHT: Charts -->
-  <div class="chart-col">
-    <div class="chart-card">
-      <h3>Asset Allocation</h3>
-      <canvas id="allocChart" height="210"></canvas>
-    </div>
-    <div class="chart-card">
-      <h3>Category Comparison</h3>
-      <canvas id="barChart" height="170"></canvas>
+    <div class="actions">
+      {% if file_info %}<a href="{% url 'update_metal_prices' %}?refresh=1" class="btn">Refresh Prices</a>{% endif %}
+      <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="file" name="excel_file" accept=".xlsx" required><button type="submit" class="btn btn-pr">Load File</button></form>
     </div>
   </div>
 
-</div><!-- /main-grid -->
+  {% if messages or errors or alerts %}<div class="notices">{% for msg in messages %}<div class="msg {{ msg.tags|default:'info' }}">{{ msg }}</div>{% endfor %}{% for e in errors %}<div class="msg error">{{ e }}</div>{% endfor %}{% for a in alerts %}{% if a.level == 'error' %}<div class="msg error">{{ a.message }}</div>{% elif a.level == 'warning' %}<div class="msg warning">{{ a.message }}</div>{% endif %}{% endfor %}</div>{% endif %}
 
-{% if snapshots|length > 1 %}
-<div class="history-card">
-  <h3>Net Worth History</h3>
-  <canvas id="historyChart" height="65"></canvas>
-</div>
-{% endif %}
+  {% if portfolio %}
+  <section class="snapshot">
+    <div class="leftpane">
+      <div class="hero"><div class="label">Net Worth (Asset Only)</div><div class="nw">₹{{ portfolio.net_worth|floatformat:0 }}</div><div class="sub">Insurance excluded | {{ portfolio.categories|length }} asset categories</div></div>
 
-<!-- DETAIL BLADES -->
-<div class="section-lbl">Detail Breakdown</div>
-
-<!-- Mutual Funds -->
-<div class="blade" id="blade-mutual_funds">
-  <div class="blade-head" onclick="toggleBlade('blade-mutual_funds')">
-    <span class="blade-icon">📈</span>
-    <span class="blade-name">Mutual Funds</span>
-    <span class="blade-total num">&#8377;{{ portfolio.mf_total|floatformat:0 }}</span>
-    <span class="blade-chevron" id="chev-blade-mutual_funds">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-mutual_funds">
-    {% if portfolio.mf_chart.labels %}
-    <div class="blade-chart-wrap">
-      <canvas id="mfChart" width="220" height="160" style="max-width:220px"></canvas>
-    </div>
-    {% endif %}
-    <table class="dt">
-      <thead><tr><th>Fund</th><th class="r">Units</th><th class="r">NAV</th><th class="r">Value &#8377;</th></tr></thead>
-      <tbody>
-        {% for f in portfolio.mutual_funds %}
-        <tr>
-          <td>
-            <div class="fn">{{ f.fund_name|truncatewords:6 }}</div>
-            <div class="fi">{{ f.identifier }}
-              {% if 'AMFI' in f.nav_source or 'Live' in f.nav_source %}<span class="badge badge-live">AMFI</span>
-              {% elif 'MFAPI' in f.nav_source %}<span class="badge badge-amfi">MFAPI</span>
-              {% elif 'Cached' in f.nav_source %}<span class="badge badge-cached">Cached</span>
-              {% else %}<span class="badge badge-default">{{ f.nav_source|truncatechars:12 }}</span>{% endif %}
-            </div>
-          </td>
-          <td class="r muted">{{ f.units|floatformat:2 }}</td>
-          <td class="r num">&#8377;{{ f.nav|floatformat:2 }}</td>
-          <td class="r num" style="font-weight:600">{{ f.current_value|floatformat:0 }}</td>
-        </tr>
+      <div class="asset-table">
+        <div class="asset-row h"><div>Category</div><div class="v">Value</div><div class="p">%</div></div>
+        {% for cat in portfolio.categories %}
+        <div class="asset-row" onclick="toggleBlade('blade-{{ cat.key }}')"><div><div class="n">{{ cat.label }}</div><div class="m">{{ cat.meta }}</div></div><div class="v">₹{{ cat.value|floatformat:0 }}</div><div class="p">{{ cat.pct|floatformat:1 }}</div></div>
         {% endfor %}
-        <tr class="foot"><td colspan="3">Total</td><td class="r num">{{ portfolio.mf_total|floatformat:0 }}</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
+      </div>
 
-<!-- Retirement -->
-<div class="blade" id="blade-retirement">
-  <div class="blade-head" onclick="toggleBlade('blade-retirement')">
-    <span class="blade-icon">🏦</span>
-    <span class="blade-name">Retirement</span>
-    <span class="blade-total num">&#8377;{{ portfolio.retirement_total|floatformat:0 }}</span>
-    <span class="blade-chevron" id="chev-blade-retirement">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-retirement">
-    {% if portfolio.retirement_chart.labels %}
-    <div class="blade-chart-wrap">
-      <canvas id="retChart" width="220" height="160" style="max-width:220px"></canvas>
-    </div>
-    {% endif %}
-    <table class="dt">
-      <thead><tr><th>Type</th><th class="r">Amount &#8377;</th></tr></thead>
-      <tbody>
-        {% for item in portfolio.retirement %}
-        <tr><td style="font-weight:600">{{ item.type }}</td><td class="r num">{{ item.amount|floatformat:0 }}</td></tr>
-        {% endfor %}
-        <tr class="foot"><td>Total</td><td class="r num">{{ portfolio.retirement_total|floatformat:0 }}</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Liquid -->
-<div class="blade" id="blade-liquid">
-  <div class="blade-head" onclick="toggleBlade('blade-liquid')">
-    <span class="blade-icon">💵</span>
-    <span class="blade-name">Liquid Accounts</span>
-    <span class="blade-total num">&#8377;{{ portfolio.liquid_total|floatformat:0 }}</span>
-    <span class="blade-chevron" id="chev-blade-liquid">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-liquid">
-    {% if portfolio.liquid_chart.labels %}
-    <div class="blade-chart-wrap">
-      <canvas id="liqChart" width="220" height="160" style="max-width:220px"></canvas>
-    </div>
-    {% endif %}
-    <table class="dt">
-      <thead><tr><th>Account</th><th>Type</th><th class="r">Amount &#8377;</th></tr></thead>
-      <tbody>
-        {% for item in portfolio.liquid %}
-        <tr><td style="font-weight:600">{{ item.account_name }}</td><td class="muted">{{ item.type }}</td><td class="r num">{{ item.amount|floatformat:0 }}</td></tr>
-        {% endfor %}
-        <tr class="foot"><td colspan="2">Total</td><td class="r num">{{ portfolio.liquid_total|floatformat:0 }}</td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Emergency Fund -->
-<div class="blade" id="blade-emergency_fund">
-  <div class="blade-head" onclick="toggleBlade('blade-emergency_fund')">
-    <span class="blade-icon">🚨</span>
-    <span class="blade-name">Emergency Fund</span>
-    <span class="blade-total num">&#8377;{{ portfolio.emergency_fund_total|floatformat:0 }}</span>
-    <span class="blade-chevron" id="chev-blade-emergency_fund">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-emergency_fund">
-    {% if portfolio.ef_chart.labels %}
-    <div class="blade-chart-wrap">
-      <canvas id="efChart" width="220" height="160" style="max-width:220px"></canvas>
-    </div>
-    {% endif %}
-    <table class="dt">
-      <thead><tr><th>Account</th><th>Type</th><th class="r">Amount &#8377;</th><th>Maturity</th></tr></thead>
-      <tbody>
-        {% for item in portfolio.emergency_fund %}
-        <tr>
-          <td style="font-weight:600">{{ item.account_name }}</td>
-          <td><span class="badge badge-cached">{{ item.type }}</span></td>
-          <td class="r num">{{ item.amount|floatformat:0 }}</td>
-          <td class="muted">{{ item.maturity_date|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-        <tr class="foot"><td colspan="2">Total</td><td class="r num">{{ portfolio.emergency_fund_total|floatformat:0 }}</td><td></td></tr>
-      </tbody>
-    </table>
-    {% if portfolio.emergency_fund_by_type %}
-    <div style="padding:7px 14px;background:var(--surf);border-top:1px solid var(--border);font-size:10px;color:var(--sub);display:flex;gap:16px;flex-wrap:wrap">
-      {% for type, total in portfolio.emergency_fund_by_type.items %}
-      <span>{{ type }}: <strong style="color:var(--text)">&#8377;{{ total|floatformat:0 }}</strong></span>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-</div>
-
-<!-- Insurance / Risk Management blade -->
-<div class="blade" id="blade-insurance">
-  <div class="blade-head" onclick="toggleBlade('blade-insurance')">
-    <span class="blade-icon">&#128737;</span>
-    <span class="blade-name">Risk Management</span>
-    <span class="blade-total num green">&#8377;{{ portfolio.risk_summary.total_coverage|floatformat:0 }} <span style="font-size:9px;color:var(--sub);font-weight:400">coverage</span></span>
-    <span class="blade-chevron" id="chev-blade-insurance">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-insurance">
-    <div style="padding:8px 14px;background:rgba(124,92,246,.05);border-bottom:1px solid var(--border);font-size:10px;color:var(--sub)">
-      Insurance is <strong style="color:#c4b5fd">not included</strong> in net worth. Coverage is a liability hedge, not an asset.
-    </div>
-    <table class="dt">
-      <thead><tr><th>Type</th><th>Provider</th><th class="r">Coverage &#8377;</th><th class="r">Premium &#8377;/yr</th><th class="r">Status</th></tr></thead>
-      <tbody>
+      <div class="risk">
+        <div class="risk-head">Risk Management (Insurance Only)</div>
+        <div class="rrow h"><div>Type</div><div class="r">Coverage</div><div class="r">Premium</div><div class="r">Status</div></div>
         {% for r in portfolio.risk_rows %}
-        <tr>
-          <td style="font-weight:600">{{ r.type }}</td>
-          <td class="muted">{{ r.provider }}</td>
-          <td class="r num green">{{ r.coverage|floatformat:0 }}</td>
-          <td class="r num muted">{{ r.premium|floatformat:0 }}</td>
-          <td class="r"><span class="sbadge sbadge-{{ r.status_level }}">{{ r.status }}</span></td>
-        </tr>
+        <div class="rrow" onclick="toggleBlade('blade-risk')"><div>{{ r.type }}</div><div class="r">₹{{ r.coverage|floatformat:0 }}</div><div class="r">₹{{ r.premium|floatformat:0 }}</div><div class="r"><span class="badge {{ r.status_level }}">{{ r.status }}</span></div></div>
+        {% empty %}
+        <div class="rrow"><div>No insurance records</div><div></div><div></div><div></div></div>
         {% endfor %}
-        <tr class="foot">
-          <td colspan="2">Total</td>
-          <td class="r num green">{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</td>
-          <td class="r num muted">{{ portfolio.risk_summary.total_premium|floatformat:0 }}</td>
-          <td></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Metals -->
-<div class="blade" id="blade-metals">
-  <div class="blade-head" onclick="toggleBlade('blade-metals')">
-    <span class="blade-icon">&#129353;</span>
-    <span class="blade-name">Metals</span>
-    <span class="blade-total num gold">&#8377;{{ portfolio.metals_total|floatformat:0 }}</span>
-    <span class="blade-chevron" id="chev-blade-metals">&#9660;</span>
-  </div>
-  <div class="blade-body" id="body-blade-metals">
-    {% if portfolio.metals_chart.labels %}
-    <div class="blade-chart-wrap">
-      <canvas id="metChart" width="220" height="160" style="max-width:220px"></canvas>
-    </div>
-    {% endif %}
-    {% for m in portfolio.metals %}
-    <div class="metal-blade">
-      <div class="metal-orb {% if m.type == 'Gold' %}gold{% else %}silver{% endif %}">
-        {% if m.type == 'Gold' %}&#129351;{% else %}&#129352;{% endif %}
-      </div>
-      <div class="metal-info">
-        <div class="mn {% if m.type == 'Gold' %}gold-t{% else %}silver-t{% endif %}">{{ m.type }}</div>
-        <div class="mq">{{ m.quantity }}g &nbsp;&middot;&nbsp;
-          {% if 'Live' in m.price_source %}<span class="badge badge-live">Live</span>
-          {% elif 'Manual' in m.price_source %}<span class="badge badge-manual">Manual</span>
-          {% elif 'Default' in m.price_source %}<span class="badge badge-default">Default</span>
-          {% else %}<span class="badge badge-cached">Cached</span>{% endif %}
-          <span style="color:var(--label);font-size:9px">&nbsp;{{ m.price_source }}</span>
-        </div>
-      </div>
-      <div class="metal-right">
-        <div class="mv {% if m.type == 'Gold' %}gold-t{% else %}silver-t{% endif %}">&#8377;{{ m.value|floatformat:0 }}</div>
-        <div class="mp">&#8377;{{ m.price_per_gram|floatformat:0 }}/g</div>
       </div>
     </div>
-    {% endfor %}
-    <form method="post" action="{% url 'update_metal_prices' %}" class="price-form">
-      {% csrf_token %}
-      <span class="pf-lbl">Override &#8377;/gram:</span>
-      <div class="pf-field"><label for="gp">Gold</label><input type="number" id="gp" name="gold_price" placeholder="e.g. 9200" step="1" min="1001"></div>
-      <div class="pf-field"><label for="sp">Silver</label><input type="number" id="sp" name="silver_price" placeholder="e.g. 110" step="0.5" min="11"></div>
-      <button type="submit" class="btn btn-gold btn-sm">Set</button>
-      <a href="{% url 'update_metal_prices' %}?refresh=1" class="btn btn-ghost btn-sm">&#8635; Auto-fetch</a>
-    </form>
-  </div>
-</div>
 
-{% else %}
-<div class="empty">
-  <div class="empty-ico">&#128194;</div>
-  <h2>No data loaded</h2>
-  <p>Upload your Excel file using the button in the top bar to get started.</p>
-</div>
-{% endif %}
+    <div class="rightpane">
+      <div class="card-title">Asset Allocation</div>
+      <canvas id="allocChart" height="290"></canvas>
+    </div>
+  </section>
 
-</div><!-- /page -->
+  <section class="compare-grid">
+    <div class="card">
+      <div class="card-title">Category Comparison</div>
+      <div class="ann">
+        {% if portfolio.category_comparison_meta.largest %}<span class="tag">Largest allocation: {{ portfolio.category_comparison_meta.largest.label }} ({{ portfolio.category_comparison_meta.largest.pct|floatformat:1 }}%)</span>{% endif %}
+        {% if portfolio.category_comparison_meta.underweight %}<span class="tag">Underweight category: {{ portfolio.category_comparison_meta.underweight.label }} ({{ portfolio.category_comparison_meta.underweight.pct|floatformat:1 }}%)</span>{% endif %}
+      </div>
+      <canvas id="cmpChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Net Worth Trend</div>
+      <canvas id="trendChart" height="220"></canvas>
+    </div>
+  </section>
+
+  <section class="blades">
+    <div class="blade" id="blade-mutual_funds"><div class="blade-head" onclick="toggleBlade('blade-mutual_funds')"><span>MF</span><span class="blade-name">Mutual Funds</span><span class="blade-val">₹{{ portfolio.mf_total|floatformat:0 }}</span><span class="chev" id="chev-blade-mutual_funds">▼</span></div><div class="blade-body" id="body-blade-mutual_funds"><div class="blade-layout mf-layout"><div class="side"><div class="stack"><div class="mini-panel"><div class="mini-title">Fund-wise Allocation</div><div class="blade-chart"><canvas id="mfBladeChart" width="250" height="180"></canvas></div></div><div class="mini-panel"><div class="mini-title">Equity / Debt / Hybrid</div><div class="blade-chart"><canvas id="mfSplitChart" width="250" height="150"></canvas></div></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Fund</th><th class="r">Units</th><th class="r">NAV</th><th class="r">Value</th></tr></thead><tbody>{% for f in portfolio.mutual_funds %}<tr><td>{{ f.fund_name }}<div class="sub">{{ f.identifier }} | {{ f.nav_source }}</div></td><td class="r">{{ f.units|floatformat:2 }}</td><td class="r">₹{{ f.nav|floatformat:2 }}</td><td class="r">₹{{ f.current_value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.mf_total|floatformat:0 }}</td></tr></tfoot></table>
+      <div style="margin-top:8px;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><table class="tbl"><thead><tr><th>Type</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for s in portfolio.mf_split %}<tr><td>{{ s.type }}</td><td class="r">₹{{ s.value|floatformat:0 }}</td><td class="r">{{ s.pct|floatformat:1 }}</td></tr>{% endfor %}</tbody></table></div>
+      </div></div></div></div>
+
+    <div class="blade" id="blade-liquid"><div class="blade-head" onclick="toggleBlade('blade-liquid')"><span>LQ</span><span class="blade-name">Liquid</span><span class="blade-val">₹{{ portfolio.liquid_total|floatformat:0 }}</span><span class="chev" id="chev-blade-liquid">▼</span></div><div class="blade-body" id="body-blade-liquid"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Account Split</div><div class="blade-chart"><canvas id="liqBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.liquid %}<tr><td>{{ x.account_name }}</td><td>{{ x.type }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">₹{{ portfolio.liquid_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
+
+    <div class="blade" id="blade-emergency_fund"><div class="blade-head" onclick="toggleBlade('blade-emergency_fund')"><span>EF</span><span class="blade-name">Emergency Fund</span><span class="blade-val">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</span><span class="chev" id="chev-blade-emergency_fund">▼</span></div><div class="blade-body" id="body-blade-emergency_fund"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="efBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th>Maturity</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.emergency_fund %}<tr><td>{{ x.account_name }}</td><td>{{ x.type }}</td><td>{{ x.maturity_date|default:'-' }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
+
+    <div class="blade" id="blade-metals"><div class="blade-head" onclick="toggleBlade('blade-metals')"><span>MT</span><span class="blade-name">Metals</span><span class="blade-val">₹{{ portfolio.metals_total|floatformat:0 }}</span><span class="chev" id="chev-blade-metals">▼</span></div><div class="blade-body" id="body-blade-metals"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Gold vs Silver</div><div class="blade-chart"><canvas id="metBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Qty</th><th class="r">Price/g</th><th class="r">Value</th></tr></thead><tbody>{% for x in portfolio.metals %}<tr><td>{{ x.type }}<div class="sub">{{ x.price_source }}</div></td><td class="r">{{ x.quantity|floatformat:2 }}</td><td class="r">₹{{ x.price_per_gram|floatformat:0 }}</td><td class="r">₹{{ x.value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.metals_total|floatformat:0 }}</td></tr></tfoot></table>
+      <form method="post" action="{% url 'update_metal_prices' %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">{% csrf_token %}<input type="number" name="gold_price" placeholder="Gold /g" step="1" min="1001"><input type="number" name="silver_price" placeholder="Silver /g" step="0.5" min="11"><button type="submit" class="btn">Set Manual</button><a href="{% url 'update_metal_prices' %}?refresh=1" class="btn">Auto Fetch</a></form>
+      </div></div></div></div>
+
+    <div class="blade" id="blade-risk"><div class="blade-head" onclick="toggleBlade('blade-risk')"><span>RM</span><span class="blade-name">Risk Management</span><span class="blade-val">₹{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span><span class="chev" id="chev-blade-risk">▼</span></div><div class="blade-body" id="body-blade-risk"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Coverage Mix</div><div class="blade-chart"><canvas id="riskBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Coverage</th><th class="r">Premium</th><th class="r">Status</th></tr></thead><tbody>{% for x in portfolio.risk_rows %}<tr><td>{{ x.type }}</td><td class="r">₹{{ x.coverage|floatformat:0 }}</td><td class="r">₹{{ x.premium|floatformat:0 }}</td><td class="r"><span class="badge {{ x.status_level }}">{{ x.status }}</span></td></tr>{% endfor %}</tbody></table></div></div></div></div>
+  </section>
+  {% else %}<div class="empty">No data loaded. Upload an Excel file to render the cockpit.</div>{% endif %}
+</div>
 
 <script>
-/* BLADE TOGGLE */
-function toggleBlade(id) {
-  var body = document.getElementById('body-' + id);
-  var chev = document.getElementById('chev-' + id);
-  if (!body) return;
-  var open = body.classList.contains('open');
-  body.classList.toggle('open', !open);
-  if (chev) chev.style.transform = open ? '' : 'rotate(-90deg)';
-}
+function toggleBlade(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(!b)return;var o=b.classList.contains('open');b.classList.toggle('open',!o);if(c){c.style.transform=o?'':'rotate(-90deg)';}}
 
 {% if portfolio %}
-/* CHART UTILITIES */
-var _chartDefaults = {
-  backgroundColor:'#161929', borderColor:'#1e2438', borderWidth:1,
-  titleColor:'#dde3f0', bodyColor:'#7a85a3', padding:10,
-};
-function makeDoughnut(id, labels, values, colours) {
-  var el = document.getElementById(id);
-  if (!el || !labels.length) return;
-  new Chart(el, {
-    type: 'doughnut',
-    data: { labels: labels, datasets: [{ data: values, backgroundColor: colours,
-      borderColor:'#161929', borderWidth:2, hoverOffset:4 }] },
-    options: { responsive:false, cutout:'58%',
-      plugins: {
-        legend:{ position:'bottom', labels:{ color:'#7a85a3', font:{size:9}, padding:8,
-          usePointStyle:true, pointStyleWidth:7 } },
-        tooltip:{ callbacks:{ label: function(ctx){
-          var t=ctx.dataset.data.reduce(function(a,b){return a+b},0);
-          var p=t>0?((ctx.parsed/t)*100).toFixed(1):0;
-          return ' \u20b9'+ctx.parsed.toLocaleString('en-IN')+'  ('+p+'%)';
-        }}, backgroundColor:_chartDefaults.backgroundColor,
-          borderColor:_chartDefaults.borderColor, borderWidth:1,
-          titleColor:_chartDefaults.titleColor, bodyColor:_chartDefaults.bodyColor, padding:_chartDefaults.padding }
-      }
-    }
-  });
-}
+function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN');}
+function pct(v,t){return t>0?((v/t)*100).toFixed(1):'0.0';}
 
-/* GLOBAL ALLOCATION */
+const pieValueLabels={id:'pieValueLabels',afterDatasetsDraw(chart,args,opts){const{ctx}=chart;const ds=chart.data.datasets[0];const total=ds.data.reduce((a,b)=>a+b,0);chart.getDatasetMeta(0).data.forEach((arc,i)=>{const val=ds.data[i];if(!val)return;const p=arc.tooltipPosition();ctx.save();ctx.fillStyle='#56607a';ctx.font='10px Segoe UI';ctx.textAlign='center';ctx.fillText(inr(val)+' | '+pct(val,total)+'%',p.x,p.y);ctx.restore();});}};
+const barLabels={id:'barLabels',afterDatasetsDraw(chart){const{ctx}=chart;const vals=chart.data.datasets[0].data;const total=vals.reduce((a,b)=>a+b,0);const meta=chart.getDatasetMeta(0);ctx.save();ctx.fillStyle='#47516b';ctx.font='10px Segoe UI';meta.data.forEach((bar,i)=>{const v=vals[i];ctx.textAlign='left';ctx.fillText(inr(v)+' ('+pct(v,total)+'%)',bar.x+8,bar.y+3);});ctx.restore();}};
+
+function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){const el=document.getElementById(id);if(!el||!labels||!labels.length)return;new Chart(el,{type:'doughnut',data:{labels:labels,datasets:[{data:values,backgroundColor:colours,borderColor:'#fff',borderWidth:1}]},plugins:plugins,options:{responsive:responsive,cutout:'58%',maintainAspectRatio:responsive,plugins:{legend:{position:'bottom',labels:{boxWidth:9,font:{size:10},color:'#5e6783',padding:10}},tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+inr(ctx.parsed)+' ('+pct(ctx.parsed,t)+'%)';}}}}}});if(!responsive){el.height=h;}}
+
 (function(){
-  var labels  = {{ portfolio.allocation_chart.labels|safe }};
-  var values  = {{ portfolio.allocation_chart.values|safe }};
-  var colours = {{ portfolio.allocation_chart.colours|safe }};
+  const labels={{ portfolio.allocation_chart.labels|safe }};
+  const values={{ portfolio.allocation_chart.values|safe }};
+  const colours={{ portfolio.allocation_chart.colours|safe }};
+  mkDoughnut('allocChart',labels,values,colours,true,260,[pieValueLabels]);
 
-  new Chart(document.getElementById('allocChart'), {
-    type:'doughnut', data:{ labels:labels, datasets:[{ data:values,
-      backgroundColor:colours, borderColor:'#161929', borderWidth:2, hoverOffset:6 }] },
-    options:{ responsive:true, cutout:'60%',
-      plugins:{
-        legend:{ position:'bottom', labels:{ color:'#7a85a3', font:{size:10}, padding:12,
-          usePointStyle:true, pointStyleWidth:8 } },
-        tooltip:{ callbacks:{ label:function(ctx){
-          var t=ctx.dataset.data.reduce(function(a,b){return a+b},0);
-          var p=t>0?((ctx.parsed/t)*100).toFixed(1):0;
-          return ' \u20b9'+ctx.parsed.toLocaleString('en-IN')+'  ('+p+'%)';
-        }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
-          titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 }
-      }
-    }
-  });
+  new Chart(document.getElementById('cmpChart'),{type:'bar',data:{labels:labels,datasets:[{data:values,backgroundColor:colours,borderRadius:5}]},plugins:[barLabels],options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return inr(ctx.parsed.x)+' ('+pct(ctx.parsed.x,t)+'%)';}}}},scales:{x:{ticks:{color:'#76809a',font:{size:9}},grid:{color:'#eceff7'}},y:{ticks:{color:'#505b77',font:{size:11}},grid:{display:false}}}}});
 
-  new Chart(document.getElementById('barChart'), {
-    type:'bar', data:{ labels:labels, datasets:[{ data:values,
-      backgroundColor:colours.map(function(c){return c+'cc'}),
-      borderColor:colours, borderWidth:1, borderRadius:4 }] },
-    options:{ responsive:true, indexAxis:'y',
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
-        return ' \u20b9'+ctx.parsed.x.toLocaleString('en-IN');
-      }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
-        titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 } },
-      scales:{
-        x:{ ticks:{ color:'#5a6380',font:{size:9},
-          callback:function(v){return '\u20b9'+(v/100000).toFixed(0)+'L'} },
-          grid:{color:'#131726'} },
-        y:{ ticks:{ color:'#7a85a3',font:{size:10} }, grid:{display:false} }
-      }
-    }
-  });
+  const snaps={{ snapshots|safe }};
+  new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:snaps.map(s=>s.month),datasets:[{label:'Net Worth',data:snaps.map(s=>s.total_net_worth),borderColor:'#2f6fed',backgroundColor:'rgba(47,111,237,.08)',fill:true,tension:.35,pointRadius:2}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>inr(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#76809a',font:{size:9}},grid:{color:'#eceff7'}},y:{ticks:{color:'#76809a',font:{size:9},callback:v=>inr(v)},grid:{color:'#eceff7'}}}}});
 
-  {% if snapshots|length > 1 %}
-  var sd = {{ snapshots|safe }};
-  new Chart(document.getElementById('historyChart'), {
-    type:'line', data:{ labels:sd.map(function(s){return s.month}),
-      datasets:[{ label:'Net Worth', data:sd.map(function(s){return s.total_net_worth}),
-        borderColor:'#4f8ef7', backgroundColor:'rgba(79,142,247,0.07)',
-        borderWidth:2, pointRadius:3, pointBackgroundColor:'#4f8ef7',
-        tension:0.38, fill:true }] },
-    options:{ responsive:true,
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(ctx){
-        return ' \u20b9'+ctx.parsed.y.toLocaleString('en-IN');
-      }}, backgroundColor:'#161929',borderColor:'#1e2438',borderWidth:1,
-        titleColor:'#dde3f0',bodyColor:'#7a85a3',padding:10 } },
-      scales:{
-        x:{ ticks:{color:'#5a6380',font:{size:9}}, grid:{color:'#131726'} },
-        y:{ ticks:{color:'#5a6380',font:{size:9},
-          callback:function(v){return '\u20b9'+(v/100000).toFixed(1)+'L'}},
-          grid:{color:'#131726'} }
-      }
-    }
-  });
-  {% endif %}
+  mkDoughnut('mfBladeChart',{{ portfolio.mf_chart.labels|safe }},{{ portfolio.mf_chart.values|safe }},{{ portfolio.mf_chart.colours|safe }},false,160,[]);
+  mkDoughnut('mfSplitChart',{{ portfolio.mf_split_chart.labels|safe }},{{ portfolio.mf_split_chart.values|safe }},{{ portfolio.mf_split_chart.colours|safe }},false,140,[]);
+  mkDoughnut('liqBladeChart',{{ portfolio.liquid_chart.labels|safe }},{{ portfolio.liquid_chart.values|safe }},{{ portfolio.liquid_chart.colours|safe }},false,160,[]);
+  mkDoughnut('efBladeChart',{{ portfolio.ef_chart.labels|safe }},{{ portfolio.ef_chart.values|safe }},{{ portfolio.ef_chart.colours|safe }},false,160,[]);
+  mkDoughnut('metBladeChart',{{ portfolio.metals_chart.labels|safe }},{{ portfolio.metals_chart.values|safe }},{{ portfolio.metals_chart.colours|safe }},false,160,[]);
+  mkDoughnut('riskBladeChart',{{ portfolio.risk_chart.labels|safe }},{{ portfolio.risk_chart.values|safe }},{{ portfolio.risk_chart.colours|safe }},false,160,[]);
 })();
-
-/* PER-BLADE MINI DOUGHNUTS */
-makeDoughnut('mfChart',  {{ portfolio.mf_chart.labels|safe }},  {{ portfolio.mf_chart.values|safe }},  {{ portfolio.mf_chart.colours|safe }});
-makeDoughnut('retChart', {{ portfolio.retirement_chart.labels|safe }}, {{ portfolio.retirement_chart.values|safe }}, {{ portfolio.retirement_chart.colours|safe }});
-makeDoughnut('liqChart', {{ portfolio.liquid_chart.labels|safe }}, {{ portfolio.liquid_chart.values|safe }}, {{ portfolio.liquid_chart.colours|safe }});
-makeDoughnut('efChart',  {{ portfolio.ef_chart.labels|safe }},  {{ portfolio.ef_chart.values|safe }},  {{ portfolio.ef_chart.colours|safe }});
-makeDoughnut('metChart', {{ portfolio.metals_chart.labels|safe }}, {{ portfolio.metals_chart.values|safe }}, {{ portfolio.metals_chart.colours|safe }});
 {% endif %}
 </script>
 </body>

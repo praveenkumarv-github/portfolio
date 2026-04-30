@@ -60,13 +60,16 @@ class PortfolioSummary:
 
     # Charts (assets only)
     allocation_chart: dict   # {labels, values, colours}
+    category_comparison_meta: dict  # {largest, underweight}
 
     # Per-blade mini-chart data (assets only)
     mf_chart: dict
+    mf_split: List[dict]
+    mf_split_chart: dict
     liquid_chart: dict
     ef_chart: dict
     metals_chart: dict
-    retirement_chart: dict
+    risk_chart: dict
 
     # Detail rows
     mutual_funds: List[dict]
@@ -146,6 +149,40 @@ def _mini_chart(labels: List[str], values: List[float], colours: List[str]) -> d
     return {"labels": out_l, "values": out_v, "colours": out_c}
 
 
+def _classify_fund_type(fund: dict) -> str:
+    """Classify a mutual fund into Equity/Debt/Hybrid using type or name hints."""
+    direct = str(fund.get("fund_type", "")).strip().lower()
+    if direct:
+        if "equity" in direct:
+            return "Equity"
+        if "debt" in direct or "bond" in direct or "income" in direct:
+            return "Debt"
+        if "hybrid" in direct or "balanced" in direct or "arbitrage" in direct:
+            return "Hybrid"
+
+    name = str(fund.get("fund_name", "")).lower()
+    equity_keys = (
+        "equity", "elss", "small cap", "mid cap", "large cap", "index",
+        "flexi", "multi cap", "thematic", "sector", "value", "growth",
+    )
+    debt_keys = (
+        "debt", "bond", "income", "gilt", "liquid", "money market",
+        "corporate", "short duration", "ultra short", "credit risk",
+    )
+    hybrid_keys = (
+        "hybrid", "balanced", "asset allocation", "arbitrage", "multi asset",
+        "dynamic asset", "conservative", "aggressive",
+    )
+
+    if any(k in name for k in equity_keys):
+        return "Equity"
+    if any(k in name for k in debt_keys):
+        return "Debt"
+    if any(k in name for k in hybrid_keys):
+        return "Hybrid"
+    return "Hybrid"
+
+
 # ---------------------------------------------------------------------------
 # Main builder
 # ---------------------------------------------------------------------------
@@ -209,12 +246,46 @@ def build_portfolio(data: dict) -> PortfolioSummary:
             chart_values.append(val)
             chart_colours.append(colour)
 
+    positive_assets = [(c.label, c.value, c.pct) for c in categories if c.value > 0]
+    if positive_assets:
+        largest = max(positive_assets, key=lambda x: x[1])
+        underweight = min(positive_assets, key=lambda x: x[1])
+        category_comparison_meta = {
+            "largest": {
+                "label": largest[0],
+                "value": largest[1],
+                "pct": largest[2],
+            },
+            "underweight": {
+                "label": underweight[0],
+                "value": underweight[1],
+                "pct": underweight[2],
+            },
+        }
+    else:
+        category_comparison_meta = {"largest": None, "underweight": None}
+
     # ── Per-blade mini charts ─────────────────────────────────────────────
     mf_list = data.get("mutual_funds", [])
     mf_chart = _mini_chart(
         [f.get("fund_name", "Fund")[:20] for f in mf_list],
         [float(f.get("current_value", 0)) for f in mf_list],
         [f"hsl({(i*47)%360},60%,55%)" for i in range(len(mf_list))],
+    )
+
+    mf_split_totals = {"Equity": 0.0, "Debt": 0.0, "Hybrid": 0.0}
+    for fund in mf_list:
+        bucket = _classify_fund_type(fund)
+        mf_split_totals[bucket] += float(fund.get("current_value", 0))
+    mf_split = []
+    for label in ("Equity", "Debt", "Hybrid"):
+        val = mf_split_totals[label]
+        pct = _pct(val, mf_total)
+        mf_split.append({"type": label, "value": val, "pct": pct})
+    mf_split_chart = _mini_chart(
+        [x["type"] for x in mf_split],
+        [x["value"] for x in mf_split],
+        ["#4f8ef7", "#7c5cf6", "#34c79a"],
     )
 
     liq_list = data.get("liquid", [])
@@ -239,11 +310,6 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     )
 
     ret_list = data.get("retirement", [])
-    ret_chart = _mini_chart(
-        [r.get("type", "Type") for r in ret_list],
-        [float(r.get("amount", 0)) for r in ret_list],
-        [f"hsl({(i*80+240)%360},55%,55%)" for i in range(len(ret_list))],
-    )
 
     # ── Risk / insurance ──────────────────────────────────────────────────
     risk_rows: List[RiskRow] = []
@@ -265,6 +331,12 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         "monthly_expense":   monthly_expense,
     }
 
+    risk_chart = _mini_chart(
+        [row.type or "Policy" for row in risk_rows],
+        [row.coverage for row in risk_rows],
+        [f"hsl({(i*61+300)%360},50%,58%)" for i in range(len(risk_rows))],
+    )
+
     return PortfolioSummary(
         net_worth=net_worth,
         mf_total=mf_total,
@@ -275,11 +347,14 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         liquid_plus_ef=liq_total + ef_total,
         categories=categories,
         allocation_chart={"labels": chart_labels, "values": chart_values, "colours": chart_colours},
+        category_comparison_meta=category_comparison_meta,
         mf_chart=mf_chart,
+        mf_split=mf_split,
+        mf_split_chart=mf_split_chart,
         liquid_chart=liq_chart,
         ef_chart=ef_chart,
         metals_chart=metals_chart,
-        retirement_chart=ret_chart,
+        risk_chart=risk_chart,
         mutual_funds=mf_list,
         retirement=ret_list,
         liquid=liq_list,

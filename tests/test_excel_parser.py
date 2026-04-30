@@ -141,6 +141,7 @@ class TestExcelParserHappyPath:
         path = _build_excel(_minimal_sheets())
         try:
             from dashboard.services.excel_parser import parse_excel_file
+            from dashboard.services.calculation_engine import build_portfolio
             result = parse_excel_file(path)
             data = result["data"]
             expected_nw = (
@@ -150,7 +151,7 @@ class TestExcelParserHappyPath:
                 + data["emergency_fund_total"]
                 + data["metals_total"]
             )
-            actual_nw = data["global_metrics"]["total_net_worth"]
+            actual_nw = build_portfolio(data).net_worth
             assert actual_nw == pytest.approx(expected_nw)
         finally:
             os.unlink(path)
@@ -263,8 +264,9 @@ class TestAllocationCorrectness:
         path = _build_excel(_minimal_sheets())
         try:
             from dashboard.services.excel_parser import parse_excel_file
+            from dashboard.services.calculation_engine import build_portfolio
             data = parse_excel_file(path)["data"]
-            nw = data["global_metrics"]["total_net_worth"]
+            nw = build_portfolio(data).net_worth
             parts = (
                 data["mutual_funds_summary"]["total_current_value"]
                 + data["retirement_total"]
@@ -280,8 +282,10 @@ class TestAllocationCorrectness:
         path = _build_excel(_minimal_sheets())
         try:
             from dashboard.services.excel_parser import parse_excel_file
+            from dashboard.services.calculation_engine import build_portfolio
             data = parse_excel_file(path)["data"]
-            ti = data["global_metrics"]["total_investments"]
+            portfolio = build_portfolio(data)
+            ti = portfolio.mf_total + portfolio.retirement_total
             mf = data["mutual_funds_summary"]["total_current_value"]
             ret = data["retirement_total"]
             liq = data["liquid_total"]

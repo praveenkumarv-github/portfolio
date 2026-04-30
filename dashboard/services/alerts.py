@@ -19,7 +19,7 @@ Each alert is a dict:
   }
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 
 # Monthly expense estimate when none is available.
@@ -33,7 +33,7 @@ def _pct(part: float, total: float) -> float:
     return (part / total) * 100
 
 
-def run_alerts(data: Dict[str, Any]) -> List[Dict[str, str]]:
+def run_alerts(data: Dict[str, Any], portfolio: Optional[Any] = None) -> List[Dict[str, str]]:
     """
     Analyse portfolio data and return a list of alerts.
 
@@ -47,8 +47,16 @@ def run_alerts(data: Dict[str, Any]) -> List[Dict[str, str]]:
     list of alert dicts  (may be empty)
     """
     alerts: List[Dict[str, str]] = []
-    metrics = data.get("global_metrics", {})
-    nw = float(metrics.get("total_net_worth", 0))
+    if portfolio is not None:
+        nw = float(getattr(portfolio, "net_worth", 0))
+    else:
+        nw = (
+            float(data.get("mutual_funds_summary", {}).get("total_current_value", 0))
+            + float(data.get("retirement_total", 0))
+            + float(data.get("liquid_total", 0))
+            + float(data.get("emergency_fund_total", 0))
+            + float(data.get("metals_total", 0))
+        )
 
     # ── Alert 1: empty portfolio ──────────────────────────────────────
     if nw <= 0:
