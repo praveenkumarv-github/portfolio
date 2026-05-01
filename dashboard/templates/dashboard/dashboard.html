@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Personal Finance Cockpit</title>
+<title>Personal Finance Board</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -86,7 +86,7 @@ input[type=url]{width:320px;max-width:100%}
 <div class="page">
   <div class="topbar">
     <div>
-      <div class="brand">Personal Finance Cockpit</div>
+      <div class="brand">Personal Finance Board</div>
       {% if file_info %}<div class="meta">Source: {{ file_info.source }} | Last loaded: {{ file_info.uploaded_at|date:"d M Y H:i" }}{% if file_info.source == 'Local File' %} | {{ file_info.filename }}{% endif %}</div>{% endif %}
     </div>
     <div class="actions">
