@@ -4,5 +4,47 @@
     "date": "28-Apr-2026",
     "scheme_name": "Kotak Bond",
     "timestamp": "2026-04-29T18:02:52.688499"
+  },
+  "120716": {
+    "nav": 167.7711,
+    "date": "30-Apr-2026",
+    "scheme_name": "UTI Nifty 50 Index Fund - Growth Option- Direct",
+    "timestamp": "2026-05-01T08:59:54.878729"
+  },
+  "148745": {
+    "nav": 20.3767,
+    "date": "30-Apr-2026",
+    "scheme_name": "Kotak Nifty Next 50 Index Fund - Direct Plan - Growth Option",
+    "timestamp": "2026-05-01T09:12:06.125990"
+  },
+  "153362": {
+    "nav": 11.0898,
+    "date": "30-Apr-2026",
+    "scheme_name": "Navi Nifty Smallcap 250 Momentum quality index fund- Direct Plan",
+    "timestamp": "2026-05-01T09:12:06.141023"
+  },
+  "152392": {
+    "nav": 8.0187,
+    "date": "30-Apr-2026",
+    "scheme_name": "Nippon India Nifty IT Index Fund - Direct Plan - Growth Option",
+    "timestamp": "2026-05-01T09:12:06.153581"
+  },
+  "133386": {
+    "nav": 61.976,
+    "date": "30-Apr-2026",
+    "scheme_name": "Motilal Oswal ELSS Tax Saver Fund - Direct Plan - Growth Option",
+    "timestamp": "2026-05-01T09:12:06.166361"
+  },
+  "122639": {
+    "nav": 91.2902,
+    "date": "30-Apr-2026",
+    "scheme_name": "Parag Parikh Flexi Cap Fund - Direct Plan - Growth",
+    "timestamp": "2026-05-01T09:12:06.178181"
+  },
+  "149550": {
+    "nav": 16.0707,
+    "date": "30-Apr-2026",
+    "scheme_name": "Sundaram Arbitrage Fund (Formerly Known as Prinicpal Arbitrage Fund) - Direct Plan - Growth",
+    "timestamp": "2026-05-01T09:12:06.191575"
   }
 }
