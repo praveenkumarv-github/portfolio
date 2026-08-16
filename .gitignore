@@ -48,3 +48,32 @@ local_settings.py
 # Excel files (except sample)
 *.xlsx
 !sample_finance_data.xlsx
+
+
+# Local .terraform directories (contains providers, modules, and plugins)
+**/.terraform/*
+
+# .tfstate files (contains sensitive plain-text architecture data)
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Exclude all variable files (often contain secrets/passwords)
+*.tfvars
+*.tfvars.json
+
+# Exclude override files (local overrides not intended for shared VCS)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Exclude CLI configuration files
+.terraformrc
+terraform.rc
+
+# Exclude local plan outputs (prevents accidental push of confidential execution plans)
+*tfplan*
