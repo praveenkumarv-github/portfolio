@@ -22,6 +22,6 @@ resource "aws_secretsmanager_secret_version" "google_sa_placeholder" {
   secret_string = jsonencode({ note = "replace-via-aws-cli" })
 
   lifecycle {
-    ignore_changes = [secret_string]   # managed outside Terraform
+    ignore_changes = [secret_string] # managed outside Terraform
   }
 }
