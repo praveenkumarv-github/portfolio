@@ -1,8 +1,3 @@
-# Route 53 hosted zone + DNS records
-#
-# After `terraform apply`, copy the nameservers from the output
-# `route53_nameservers` and set them as NS records at your registrar.
-
 resource "aws_route53_zone" "primary" {
   name = var.domain_name
 }

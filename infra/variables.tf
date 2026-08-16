@@ -5,12 +5,12 @@ variable "aws_region" {
 }
 
 variable "domain_name" {
-  description = "Root domain you purchased (e.g. example.com)"
+  description = "Root domain you purchased (e.g. karynxt.xyz)"
   type        = string
 }
 
 variable "subdomain" {
-  description = "Subdomain for the dashboard (e.g. finance → finance.example.com)"
+  description = "Subdomain for the dashboard (e.g. finance)"
   type        = string
   default     = "finance"
 }
@@ -27,7 +27,6 @@ variable "environment" {
   default     = "prod"
 }
 
-# ── Phase-2 variables — fill after running `zappa deploy` ─────────────────
 variable "zappa_api_gateway_id" {
   description = "REST API ID printed by `zappa deploy` (leave empty on first apply)"
   type        = string

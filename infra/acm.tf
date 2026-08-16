@@ -1,6 +1,3 @@
-# ACM certificate — REGIONAL, same region as Lambda + API Gateway.
-# DNS validation uses the Route 53 zone created in route53.tf.
-
 resource "aws_acm_certificate" "dashboard" {
   domain_name       = "${var.subdomain}.${var.domain_name}"
   validation_method = "DNS"

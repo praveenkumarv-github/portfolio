@@ -6,23 +6,19 @@ terraform {
       version = "~> 5.0"
     }
   }
-
-  # Uncomment to store state remotely (recommended):
-  # backend "s3" {
-  #   bucket = "your-tfstate-bucket"
-  #   key    = "finance-dash/terraform.tfstate"
-  #   region = "ap-south-1"
-  # }
 }
 
 provider "aws" {
   region = var.aws_region
 
+  # These tags will be automatically applied to ALL resources
+  # (Lambda, S3, API Gateway, IAM Roles, Secrets Manager, etc.)
   default_tags {
     tags = {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
+      purpose     = "fin-dashboard"
     }
   }
 }
