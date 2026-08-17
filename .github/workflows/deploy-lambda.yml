@@ -95,7 +95,7 @@ jobs:
           prod["runtime"] = "python3.11"
           prod["slim_handler"] = True
           prod["use_precompiled_packages"] = True
-          prod["ephemeral_storage"] = {"size": 2048}
+          prod["ephemeral_storage"] = {"Size": 2048}
           prod["exclude"] = [
                         "*.csv", 
                         "venv", 
