@@ -74,11 +74,16 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:ListRolePolicies",
       "iam:TagRole",
       "iam:UntagRole",
+      "iam:TagPolicy",
+      "iam:UntagPolicy",
+      "iam:GetOpenIDConnectProvider",               # <-- ADD THIS
+      "iam:CreateOpenIDConnectProvider",            # <-- ADD THIS
+      "iam:DeleteOpenIDConnectProvider",            # <-- ADD THIS
+      "iam:UpdateOpenIDConnectProviderThumbprint",  # <-- ADD THIS
+      "iam:TagOpenIDConnectProvider",               # <-- ADD THIS
       "lambda:*",
       "logs:*",
       "route53:*",
-      "iam:TagPolicy",      
-      "iam:UntagPolicy",
       "s3:*",
       "secretsmanager:*",
       "sts:GetCallerIdentity",
