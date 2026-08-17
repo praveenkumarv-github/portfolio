@@ -50,10 +50,7 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
           
-          # 1. Install Zappa and basic utilities
-          pip install zappa boto3 requests
-          
-          # 2. Force pip to download Amazon Linux (manylinux) binary wheels for Lambda compatibility
+          pip install -r requirements-deploy.txt  
           pip install \
             --platform manylinux2014_x86_64 \
             --implementation cp \
@@ -61,7 +58,7 @@ jobs:
             --target ./venv/lib/python3.11/site-packages \
             --only-binary=:all: \
             --upgrade \
-            -r requirements-deploy.txt
+            numpy pandas pysqlite3-binary
 
       - name: Terraform Phase 1 (base infra)
         if: ${{ github.event.inputs.terraform_apply == 'true' }}
