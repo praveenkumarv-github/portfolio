@@ -35,6 +35,6 @@
     ],
     "slim_handler": false,
     "keep_warm": false,
-    "use_precompiled_packages": python -m zappa.cli update production
+    "use_precompiled_packages": true
   }
 }

@@ -6,18 +6,18 @@ fresh Lambda container) and returns the WSGI application.
 """
 
 import os
+import django
+from django.core.management import call_command
+from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "finance_dashboard.settings_lambda")
 
-# Auto-migrate on cold start — safe to run repeatedly (no-op when up to date)
-try:
-    import django
-    django.setup()
-    from django.core.management import call_command
-    call_command("migrate", "--run-syncdb", verbosity=0)
-except Exception:
-    pass  # never crash Lambda startup; UI will surface DB errors naturally
+django.setup()
 
-from django.core.wsgi import get_wsgi_application  # noqa: E402
+try:
+    # Migrate default Django tables (sessions, contenttypes, etc.) and custom models
+    call_command("migrate", interactive=False, verbosity=0)
+except Exception as e:
+    print(f"[WSGI Startup Migration Error]: {e}")
 
 application = get_wsgi_application()
