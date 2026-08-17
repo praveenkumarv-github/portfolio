@@ -173,7 +173,17 @@ jobs:
             -var="github_owner=praveenkumarv-github" \
             -var="github_repo=portfolio"
 
-      - name: Lambda smoke check
+      - name: Deploy or update with Zappa
+              run: |
+                set -e
+                if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
+                  python -m zappa.cli update "$ZAPPA_STAGE"
+                else
+                  python -m zappa.cli deploy "$ZAPPA_STAGE"
+                fi
+
+      - name: Fetch CloudWatch Logs on 502 Crash
+        if: failure()
         run: |
-          python -m zappa.cli invoke "$ZAPPA_STAGE" lambda_diagnostics.main
-          python -m zappa.cli tail "$ZAPPA_STAGE" --since 5m
+          echo "Deployment failed (likely a 502 error). Fetching the CloudWatch error traceback..."
+          python -m zappa.cli tail "$ZAPPA_STAGE" --since 10m
