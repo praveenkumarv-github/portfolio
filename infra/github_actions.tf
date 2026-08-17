@@ -77,6 +77,8 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "lambda:*",
       "logs:*",
       "route53:*",
+      "iam:TagPolicy",      
+      "iam:UntagPolicy",
       "s3:*",
       "secretsmanager:*",
       "sts:GetCallerIdentity",
