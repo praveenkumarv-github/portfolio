@@ -38,3 +38,27 @@ variable "zappa_stage_name" {
   type        = string
   default     = "production"
 }
+
+variable "enable_github_oidc_role" {
+  description = "Create IAM OIDC provider + role for GitHub Actions deployments"
+  type        = bool
+  default     = false
+}
+
+variable "github_owner" {
+  description = "GitHub repository owner for OIDC trust policy"
+  type        = string
+  default     = "praveenkumarv-github"
+}
+
+variable "github_repo" {
+  description = "GitHub repository name for OIDC trust policy"
+  type        = string
+  default     = "portfolio"
+}
+
+variable "github_branch" {
+  description = "GitHub branch name allowed to assume OIDC role"
+  type        = string
+  default     = "fea-googlesheet-aws"
+}

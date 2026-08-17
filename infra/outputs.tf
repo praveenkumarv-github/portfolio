@@ -12,3 +12,8 @@ output "route53_nameservers" {
   description = "IMPORTANT: set these as NS records at your domain registrar"
   value       = aws_route53_zone.primary.name_servers
 }
+
+output "github_actions_role_arn" {
+  description = "Role ARN for GitHub Actions OIDC deploy workflow"
+  value       = try(aws_iam_role.github_actions_deploy[0].arn, "")
+}

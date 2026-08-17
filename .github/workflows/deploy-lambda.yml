@@ -1,0 +1,162 @@
+name: Deploy Lambda App
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_apply:
+        description: "Run Terraform apply phases"
+        required: true
+        default: "true"
+      zappa_stage:
+        description: "Zappa stage"
+        required: true
+        default: "production"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latests
+    env:
+      AWS_REGION: ap-south-1
+      TF_IN_AUTOMATION: true
+      ZAPPA_STAGE: ${{ github.event.inputs.zappa_stage }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install deploy dependencies (Linux build)
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements-deploy.txt
+
+      - name: Terraform Phase 1 (base infra)
+        if: ${{ github.event.inputs.terraform_apply == 'true' }}
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
+            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
+            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="zappa_api_gateway_id="
+
+      - name: Capture Terraform outputs
+        id: tf
+        if: ${{ github.event.inputs.terraform_apply == 'true' }}
+        working-directory: infra
+        run: |
+          echo "role_arn=$(terraform output -raw lambda_role_arn)" >> "$GITHUB_OUTPUT"
+          echo "s3_bucket=$(terraform output -raw s3_bucket)" >> "$GITHUB_OUTPUT"
+
+      - name: Patch zappa settings for CI package + layers
+        run: |
+          python - << 'PY'
+          import json
+          import os
+
+          path = "zappa_settings.json"
+          with open(path, "r", encoding="utf-8") as f:
+              cfg = json.load(f)
+
+          stage = os.environ.get("ZAPPA_STAGE", "production")
+          prod = cfg[stage]
+
+          prod["runtime"] = "python3.11"
+          prod["slim_handler"] = True
+          prod["use_precompiled_packages"] = True
+
+          role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
+          bucket = os.environ.get("TF_S3_BUCKET", "").strip()
+          if role_arn:
+              prod["role_arn"] = role_arn
+          if bucket:
+              prod["s3_bucket"] = bucket
+
+          layer_arns_raw = os.environ.get("LAMBDA_LAYER_ARNS", "").strip()
+          if layer_arns_raw:
+              prod["lambda_layers"] = [x.strip() for x in layer_arns_raw.split(",") if x.strip()]
+
+          envs = prod.setdefault("environment_variables", {})
+          if os.environ.get("DJANGO_SECRET_KEY"):
+              envs["DJANGO_SECRET_KEY"] = os.environ["DJANGO_SECRET_KEY"]
+          if os.environ.get("ALLOWED_HOSTS"):
+              envs["ALLOWED_HOSTS"] = os.environ["ALLOWED_HOSTS"]
+          if os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
+              envs["GOOGLE_SERVICE_ACCOUNT_JSON"] = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
+
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(cfg, f, indent=2)
+          PY
+        env:
+          TF_ROLE_ARN: ${{ steps.tf.outputs.role_arn }}
+          TF_S3_BUCKET: ${{ steps.tf.outputs.s3_bucket }}
+          LAMBDA_LAYER_ARNS: ${{ vars.LAMBDA_LAYER_ARNS }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Upsert Google service account secret in Secrets Manager
+        if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
+        run: |
+          aws secretsmanager put-secret-value \
+            --region "$AWS_REGION" \
+            --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
+            --secret-string '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}'
+
+      - name: Deploy or update with Zappa
+        run: |
+          set -e
+          if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
+            python -m zappa.cli update "$ZAPPA_STAGE"
+          else
+            python -m zappa.cli deploy "$ZAPPA_STAGE"
+          fi
+
+      - name: Get API Gateway ID from Zappa status
+        id: apigw
+        run: |
+          python -m zappa.cli status "$ZAPPA_STAGE" | tee /tmp/zappa_status_live.txt
+          URL=$(grep -Eo 'https://[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/[a-zA-Z0-9_-]+' /tmp/zappa_status_live.txt | head -n1)
+          if [ -z "$URL" ]; then
+            echo "Could not find API Gateway URL from zappa status output"
+            exit 1
+          fi
+          API_ID=$(echo "$URL" | sed -E 's#https://([a-z0-9]+)\.execute-api\..*#\1#')
+          echo "api_id=$API_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform Phase 2 (custom domain mapping)
+        if: ${{ github.event.inputs.terraform_apply == 'true' }}
+        working-directory: infra
+        run: |
+          terraform apply -auto-approve \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
+            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
+            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="zappa_api_gateway_id=${{ steps.apigw.outputs.api_id }}" \
+            -var="zappa_stage_name=${{ env.ZAPPA_STAGE }}"
+
+      - name: Lambda smoke check
+        run: |
+          python -m zappa.cli invoke "$ZAPPA_STAGE" lambda_diagnostics.main
+          python -m zappa.cli tail "$ZAPPA_STAGE" --since 5m

@@ -16,7 +16,8 @@
     "exclude": [
       ".git", ".gitignore", ".env", "**/__pycache__", "**/*.pyc", "tests/**", "venv/**", ".pytest_cache/**", "*.md", "infra/**", ".terraform/**", "./cache/**", "./data/**", "./media/**", "db.sqlite3", "*.xlsx", "*.csv", "key.json"
     ],
-    "slim_handler": false,
+    "slim_handler": true,
+    "lambda_layers": [],
     "keep_warm": false,
     "use_precompiled_packages": true
   }
