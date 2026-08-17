@@ -77,3 +77,4 @@ terraform.rc
 
 # Exclude local plan outputs (prevents accidental push of confidential execution plans)
 *tfplan*
+alpine-biplane-424609-d7-8d3a07a9335d.json

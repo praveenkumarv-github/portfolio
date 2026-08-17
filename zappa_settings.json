@@ -11,39 +11,30 @@
     "environment_variables": {
       "DJANGO_SETTINGS_MODULE": "finance_dashboard.settings_lambda",
       "DJANGO_SECRET_KEY": "django-insecure-financial-dashboard-prod-key",
-      "ALLOWED_HOSTS": "finance.karynxt.xyz"
+      "ALLOWED_HOSTS": "finance.karynxt.xyz,.amazonaws.com,localhost,127.0.0.1"
     },
     "exclude": [
       ".git",
-      ".git/**",
       ".gitignore",
       ".env",
       "**/__pycache__",
       "**/*.pyc",
-      "tests",
       "tests/**",
-      "venv",
       "venv/**",
-      ".pytest_cache",
       ".pytest_cache/**",
       "*.md",
-      "infra",
       "infra/**",
-      ".terraform",
       ".terraform/**",
-      "cache",
-      "cache/**",
-      "data",
-      "data/**",
-      "media",
-      "media/**",
+      "./cache/**",
+      "./data/**",
+      "./media/**",
       "db.sqlite3",
       "*.xlsx",
       "*.csv",
       "key.json"
     ],
-    "slim_handler": true,
+    "slim_handler": false,
     "keep_warm": false,
-    "use_precompiled_packages": false
+    "use_precompiled_packages": python -m zappa.cli update production
   }
 }
