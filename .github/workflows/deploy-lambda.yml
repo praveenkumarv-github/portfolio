@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latests
     env:
       AWS_REGION: ap-south-1
       TF_IN_AUTOMATION: true
@@ -115,14 +115,12 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
 
       - name: Upsert Google service account secret in Secrets Manager
-        if: env.GOOGLE_SA_JSON != ''
-        env:
-          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        if: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON != '' }}
         run: |
           aws secretsmanager put-secret-value \
             --region "$AWS_REGION" \
             --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
-            --secret-string "$GOOGLE_SA_JSON"
+            --secret-string '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}'
 
       - name: Deploy or update with Zappa
         run: |
