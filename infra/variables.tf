@@ -42,7 +42,7 @@ variable "zappa_stage_name" {
 variable "enable_github_oidc_role" {
   description = "Create IAM OIDC provider + role for GitHub Actions deployments"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "github_owner" {
