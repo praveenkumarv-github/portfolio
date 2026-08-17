@@ -47,20 +47,20 @@ jobs:
           pip install -r requirements-deploy.txt
 
       - name: Terraform Phase 1 (base infra)
-              if: ${{ github.event.inputs.terraform_apply == 'true' }}
-              working-directory: infra
-              run: |
-                terraform init
-                terraform apply -auto-approve \
-                  -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-                  -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
-                  -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
-                  -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
-                  -var="aws_region=${{ env.AWS_REGION }}" \
-                  -var="zappa_api_gateway_id=zmw0rzjibg" \
-                  -var="enable_github_oidc_role=true" \
-                  -var="github_owner=praveenkumarv-github" \
-                  -var="github_repo=portfolio"
+        if: ${{ github.event.inputs.terraform_apply == 'true' }}
+        working-directory: infra
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
+            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
+            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="zappa_api_gateway_id=" \
+            -var="enable_github_oidc_role=true" \
+            -var="github_owner=praveenkumarv-github" \
+            -var="github_repo=portfolio"
 
       - name: Capture Terraform outputs
         id: tf
@@ -159,7 +159,10 @@ jobs:
             -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
             -var="zappa_api_gateway_id=${{ steps.apigw.outputs.api_id }}" \
-            -var="zappa_stage_name=${{ env.ZAPPA_STAGE }}"
+            -var="zappa_stage_name=${{ env.ZAPPA_STAGE }}" \
+            -var="enable_github_oidc_role=true" \
+            -var="github_owner=praveenkumarv-github" \
+            -var="github_repo=portfolio"
 
       - name: Lambda smoke check
         run: |
