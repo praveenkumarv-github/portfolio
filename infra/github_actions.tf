@@ -70,17 +70,19 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:DeletePolicy",
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
+      "iam:ListPolicyVersions",             # Added to prevent destruction errors
+      "iam:ListInstanceProfilesForRole",    # Added to prevent destruction errors
       "iam:ListAttachedRolePolicies",
       "iam:ListRolePolicies",
       "iam:TagRole",
       "iam:UntagRole",
       "iam:TagPolicy",
       "iam:UntagPolicy",
-      "iam:GetOpenIDConnectProvider",               # <-- ADD THIS
-      "iam:CreateOpenIDConnectProvider",            # <-- ADD THIS
-      "iam:DeleteOpenIDConnectProvider",            # <-- ADD THIS
-      "iam:UpdateOpenIDConnectProviderThumbprint",  # <-- ADD THIS
-      "iam:TagOpenIDConnectProvider",               # <-- ADD THIS
+      "iam:GetOpenIDConnectProvider",
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint",
+      "iam:TagOpenIDConnectProvider",
       "lambda:*",
       "logs:*",
       "route53:*",
@@ -92,6 +94,29 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "tag:UntagResources"
     ]
     resources = ["*"]
+  }
+
+  # 1. Explicit S3 Backend State Permissions block
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+    resources = [
+      "arn:aws:s3:::finance-dash-tfstate-875636131680/prod/terraform.tfstate"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket"
+    ]
+    resources = [
+      "arn:aws:s3:::finance-dash-tfstate-875636131680"
+    ]
   }
 }
 
