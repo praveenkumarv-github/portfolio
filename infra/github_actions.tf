@@ -1,5 +1,6 @@
 locals {
-  github_sub = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
+  # Allows wildcard branch matching so any branch from your repo can deploy
+  github_sub = "repo:${var.github_owner}/${var.github_repo}:*"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -7,7 +8,11 @@ resource "aws_iam_openid_connect_provider" "github" {
 
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1", 
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd", 
+    "1b511abead59c6ce207077c0bf0e0043b1382612"
+  ]
 }
 
 data "aws_iam_policy_document" "github_actions_assume" {
@@ -29,7 +34,7 @@ data "aws_iam_policy_document" "github_actions_assume" {
     }
 
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values   = [local.github_sub]
     }
@@ -86,8 +91,9 @@ data "aws_iam_policy_document" "github_actions_deploy" {
 resource "aws_iam_policy" "github_actions_deploy" {
   count = var.enable_github_oidc_role ? 1 : 0
 
-  name   = "${var.project}-github-actions-deploy-${var.environment}"
-  policy = data.aws_iam_policy_document.github_actions_deploy[0].json
+  name        = "${var.project}-github-actions-deploy-${var.environment}"
+  description = "Permissions for GitHub Actions to deploy Lambda and manage infrastructure"
+  policy      = data.aws_iam_policy_document.github_actions_deploy[0].json
 }
 
 resource "aws_iam_role_policy_attachment" "github_actions_deploy" {
