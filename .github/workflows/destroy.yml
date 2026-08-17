@@ -30,7 +30,7 @@ jobs:
             echo "❌ Destruction aborted: You must type 'DESTROY' in the confirmation box."
             exit 1
           fi
-          echo "⚠️ Proceeding with infrastructure destruction..."
+          echo "⚠️ Proceeding with exact infrastructure destruction..."
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install dependencies
+      - name: Install undeploy dependencies
         run: |
           python -m venv venv
           echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
@@ -57,29 +57,50 @@ jobs:
           source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
           
-          # Only Zappa and boto3 are needed for the undeploy command
+          # We only need zappa and boto3 to run the undeploy command. 
+          # No heavy C-binaries (pandas/numpy) are needed just to delete the app.
           pip install zappa boto3
 
-      - name: Undeploy Zappa (Lambda & API Gateway)
+      - name: Step 1 - Terraform Unmap Custom Domain
+        working-directory: infra
+        run: |
+          terraform init
+          # Passing an empty API ID forces Terraform to detach the custom domain safely
+          # This "unlocks" the API Gateway so Zappa is allowed to delete it.
+          terraform apply -auto-approve \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
+            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
+            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="zappa_api_gateway_id=" \
+            -var="enable_github_oidc_role=true" \
+            -var="github_owner=praveenkumarv-github" \
+            -var="github_repo=portfolio"
+
+      - name: Step 2 - Undeploy Zappa App
         run: |
           source venv/bin/activate
-          
-          # We run status to see if the deployment exists before trying to undeploy
           if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
-            echo "🗑️ Existing deployment found. Undeploying..."
+            echo "🗑️ Existing deployment found. Undeploying Zappa Lambda & API Gateway..."
             python -m zappa.cli undeploy "$ZAPPA_STAGE" --yes
           else
             echo "✅ No active Zappa deployment found. Skipping undeploy."
           fi
 
-      - name: Terraform Destroy (Infrastructure)
+      - name: Step 3 - Clean up Secrets Manager
+        run: |
+          echo "Attempting to schedule Secrets Manager deletion..."
+          aws secretsmanager delete-secret \
+            --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
+            --recovery-window-in-days 7 \
+            --region "$AWS_REGION" || true
+          echo "✅ Secret scheduled for deletion (or didn't exist)."
+
+      - name: Step 4 - Terraform Full Destroy (Base Infra)
         working-directory: infra
         run: |
-          terraform init
-          
-          # Using -refresh=false here is sometimes necessary during destroy if 
-          # Zappa already deleted resources Terraform was tracking, but generally
-          # standard destroy is safest.
+          # Finally, destroy the base IAM roles, S3 buckets, and Route53 records
           terraform destroy -auto-approve \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
