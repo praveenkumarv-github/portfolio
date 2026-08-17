@@ -19,8 +19,6 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    container:
-      image: public.ecr.aws/lambda/python:3.11
     env:
       AWS_REGION: ap-south-1
       TF_IN_AUTOMATION: true
@@ -29,16 +27,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform (on host)
-        run: |
-          echo "Installing Terraform on host..."
-          apt-get update -qq
-          apt-get install -y -qq wget unzip
-          cd /tmp
-          wget -q https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip
-          unzip -q terraform_1.5.0_linux_amd64.zip
-          mv terraform /usr/local/bin/
-          terraform version
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -46,9 +41,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install deploy dependencies (Amazon Linux)
+      - name: Install dependencies (on Ubuntu host)
         run: |
-          # Already in Python 3.11 Lambda container
+          python -m venv venv
+          echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
+          echo "$(pwd)/venv/bin" >> $GITHUB_PATH
+          source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements-deploy.txt
 
@@ -78,6 +76,7 @@ jobs:
 
       - name: Patch zappa settings for CI package + layers
         run: |
+          source venv/bin/activate
           python - << 'PY'
           import json
           import os
@@ -93,7 +92,6 @@ jobs:
           prod["slim_handler"] = True
           prod["use_precompiled_packages"] = True
           prod["ephemeral_storage"] = {"Size": 3072}
-          prod["zip_repo"] = False
           
           # Comprehensive exclude list
           prod["exclude"] = [
@@ -118,8 +116,7 @@ jobs:
               "db.sqlite3",
               "./cache/**",
               "./data/**",
-              "./media/**",
-              "manage.py"
+              "./media/**"
           ]
 
           role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
@@ -157,33 +154,63 @@ jobs:
         env:
           GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
+          source venv/bin/activate
           aws secretsmanager put-secret-value \
             --region "$AWS_REGION" \
             --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
             --secret-string "$GOOGLE_SA_JSON"
 
-      - name: Clean Zappa cache
+      - name: Clean Zappa cache before packaging
         run: |
-          rm -rf .zappa* venv pip-cache
+          rm -rf .zappa* .zappa_settings_cache pip-cache .venv
           echo "✅ Cleared old Zappa cache"
 
-      - name: Deploy or update with Zappa
+      - name: Build with Zappa (in Amazon Linux container)
         run: |
-          set -e
-          python -m pip install zappa --upgrade
+          source venv/bin/activate
           
-          if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
-            echo "Updating existing Lambda..."
-            python -m zappa.cli update "$ZAPPA_STAGE"
-          else
-            echo "Deploying new Lambda..."
-            python -m zappa.cli deploy "$ZAPPA_STAGE"
-          fi
+          # Run Zappa commands inside Amazon Linux Docker to get correct wheels
+          docker run --rm \
+            -v "$(pwd):/app" \
+            -w /app \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
+            -e AWS_REGION=$AWS_REGION \
+            -e ZAPPA_STAGE=$ZAPPA_STAGE \
+            public.ecr.aws/lambda/python:3.11 \
+            bash -c "
+              pip install -q zappa boto3
+              
+              if python -m zappa.cli status $ZAPPA_STAGE >/tmp/zappa_status.txt 2>&1; then
+                echo '📦 Updating existing Lambda...'
+                python -m zappa.cli update $ZAPPA_STAGE
+              else
+                echo '🚀 Deploying new Lambda...'
+                python -m zappa.cli deploy $ZAPPA_STAGE
+              fi
+            "
 
       - name: Get API Gateway ID from Zappa status
         id: apigw
         run: |
-          python -m zappa.cli status "$ZAPPA_STAGE" | tee /tmp/zappa_status_live.txt
+          source venv/bin/activate
+          
+          # Fetch status inside container to be consistent
+          docker run --rm \
+            -v "$(pwd):/app" \
+            -w /app \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
+            -e AWS_REGION=$AWS_REGION \
+            -e ZAPPA_STAGE=$ZAPPA_STAGE \
+            public.ecr.aws/lambda/python:3.11 \
+            bash -c "
+              pip install -q zappa
+              python -m zappa.cli status $ZAPPA_STAGE
+            " | tee /tmp/zappa_status_live.txt
+            
           URL=$(grep -Eo 'https://[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/[a-zA-Z0-9_-]+' /tmp/zappa_status_live.txt | head -n1)
           if [ -z "$URL" ]; then
             echo "Could not find API Gateway URL from zappa status output"
@@ -212,4 +239,5 @@ jobs:
         if: failure()
         run: |
           echo "Deployment failed. Fetching CloudWatch logs..."
+          source venv/bin/activate
           python -m zappa.cli tail "$ZAPPA_STAGE" --since 10m || true
