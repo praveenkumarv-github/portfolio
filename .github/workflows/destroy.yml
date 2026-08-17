@@ -96,18 +96,3 @@ jobs:
             --recovery-window-in-days 7 \
             --region "$AWS_REGION" || true
           echo "✅ Secret scheduled for deletion (or didn't exist)."
-
-      - name: Step 4 - Terraform Full Destroy (Base Infra)
-        working-directory: infra
-        run: |
-          # Finally, destroy the base IAM roles, S3 buckets, and Route53 records
-          terraform destroy -auto-approve \
-            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
-            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
-            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="zappa_api_gateway_id=" \
-            -var="enable_github_oidc_role=true" \
-            -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio"
