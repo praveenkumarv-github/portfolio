@@ -20,6 +20,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
       AWS_REGION: ap-south-1
       TF_IN_AUTOMATION: true
       ZAPPA_STAGE: ${{ github.event.inputs.zappa_stage }}
@@ -41,14 +42,26 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install dependencies (on Ubuntu host)
+      - name: Install deploy dependencies (Native Amazon Linux Binaries)
         run: |
           python -m venv venv
           echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
           echo "$(pwd)/venv/bin" >> $GITHUB_PATH
           source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
-          pip install -r requirements-deploy.txt
+          
+          # 1. Install Zappa and basic utilities
+          pip install zappa boto3 requests
+          
+          # 2. Force pip to download Amazon Linux (manylinux) binary wheels for Lambda compatibility
+          pip install \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.11 \
+            --target ./venv/lib/python3.11/site-packages \
+            --only-binary=:all: \
+            --upgrade \
+            -r requirements-deploy.txt
 
       - name: Terraform Phase 1 (base infra)
         if: ${{ github.event.inputs.terraform_apply == 'true' }}
@@ -90,7 +103,9 @@ jobs:
 
           prod["runtime"] = "python3.11"
           prod["slim_handler"] = True
-          prod["use_precompiled_packages"] = True
+          
+          # MUST BE FALSE so Zappa uses our manually downloaded manylinux wheels from above
+          prod["use_precompiled_packages"] = False 
           prod["ephemeral_storage"] = {"Size": 3072}
           
           # Comprehensive exclude list
@@ -101,7 +116,6 @@ jobs:
               "**/__pycache__",
               "**/*.pyc",
               "tests/**",
-              "venv/**",
               ".pytest_cache/**",
               "*.md",
               "infra/**",
@@ -114,9 +128,9 @@ jobs:
               ".vscode/**",
               ".idea/**",
               "db.sqlite3",
-              "./cache/**",
-              "./data/**",
-              "./media/**"
+              "cache/**",
+              "data/**",
+              "media/**"
           ]
 
           role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
@@ -162,54 +176,28 @@ jobs:
 
       - name: Clean Zappa cache before packaging
         run: |
-          rm -rf .zappa* .zappa_settings_cache pip-cache .venv
+          rm -rf .zappa* .zappa_settings_cache pip-cache
           echo "✅ Cleared old Zappa cache"
 
-      - name: Build with Zappa (in Amazon Linux container)
+      - name: Deploy or update with Zappa
         run: |
           source venv/bin/activate
+          set -e
           
-          # Run Zappa commands inside Amazon Linux Docker to get correct wheels
-          docker run --rm \
-            -v "$(pwd):/app" \
-            -w /app \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
-            -e AWS_REGION=$AWS_REGION \
-            -e ZAPPA_STAGE=$ZAPPA_STAGE \
-            public.ecr.aws/lambda/python:3.11 \
-            bash -c "
-              pip install -q zappa boto3
-              
-              if python -m zappa.cli status $ZAPPA_STAGE >/tmp/zappa_status.txt 2>&1; then
-                echo '📦 Updating existing Lambda...'
-                python -m zappa.cli update $ZAPPA_STAGE
-              else
-                echo '🚀 Deploying new Lambda...'
-                python -m zappa.cli deploy $ZAPPA_STAGE
-              fi
-            "
+          if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
+            echo '📦 Updating existing Lambda...'
+            python -m zappa.cli update "$ZAPPA_STAGE"
+          else
+            echo '🚀 Deploying new Lambda...'
+            python -m zappa.cli deploy "$ZAPPA_STAGE"
+          fi
 
       - name: Get API Gateway ID from Zappa status
         id: apigw
         run: |
           source venv/bin/activate
           
-          # Fetch status inside container to be consistent
-          docker run --rm \
-            -v "$(pwd):/app" \
-            -w /app \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -e AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN \
-            -e AWS_REGION=$AWS_REGION \
-            -e ZAPPA_STAGE=$ZAPPA_STAGE \
-            public.ecr.aws/lambda/python:3.11 \
-            bash -c "
-              pip install -q zappa
-              python -m zappa.cli status $ZAPPA_STAGE
-            " | tee /tmp/zappa_status_live.txt
+          python -m zappa.cli status "$ZAPPA_STAGE" | tee /tmp/zappa_status_live.txt
             
           URL=$(grep -Eo 'https://[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/[a-zA-Z0-9_-]+' /tmp/zappa_status_live.txt | head -n1)
           if [ -z "$URL" ]; then
