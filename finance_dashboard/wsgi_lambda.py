@@ -5,6 +5,10 @@ Runs Django migrations on cold start (SQLite at /tmp is empty on a
 fresh Lambda container) and returns the WSGI application.
 """
 
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 import os
 import django
 from django.core.management import call_command

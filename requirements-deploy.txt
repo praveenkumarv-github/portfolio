@@ -1,32 +1,47 @@
+# Core web framework
+Django==5.0.4
 asgiref==3.12.1
-beautifulsoup4==4.15.0
+sqlparse==0.6.0
+
+# Zappa + AWS
+zappa==0.62.1
 boto3==1.43.72
 botocore==1.43.72
-certifi==2026.7.22
-charset-normalizer==3.5.1
-Django==5.0.4
-et_xmlfile==2.0.0
-google-api-python-client==2.176.0
+s3transfer==0.19.2
+
+# Google APIs (for sheet sync)
 google-auth==2.40.3
 google-auth-httplib2==0.2.0
-idna==3.18
+google-api-python-client==2.176.0
+
+# Data processing (MUST be after Zappa, before parsing)
+numpy>=2.0.0
+pandas>=2.0.0
+
+# SQLite fix (MUST come early in resolution order)
+pysqlite3-binary>=3.45.0
+
+# Web scraping
+requests==2.34.2
+beautifulsoup4==4.15.0
 lxml==6.1.1
-MarkupSafe==3.0.3
+soupsieve==2.9.2
+
+# Excel/Office
 openpyxl==3.1.5
+et_xmlfile==2.0.0
+
+# Security & utilities
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.18
+urllib3==2.7.0
+MarkupSafe==3.0.3
+Werkzeug==3.1.8
+six==1.17.0
+typing_extensions==4.16.0
+
+# Date/time
 python-dateutil==2.9.0.post0
 pytz==2026.3.post1
-requests==2.34.2
-s3transfer==0.19.2
-six==1.17.0
-soupsieve==2.9.2
-sqlparse==0.6.0
-typing_extensions==4.16.0
 tzdata==2026.3
-urllib3==2.7.0
-Werkzeug==3.1.8
-zappa==0.62.1
-pandas>=2.0.0
-pysqlite3-binary
-pysqlite3-binary
-numpy
-pandas

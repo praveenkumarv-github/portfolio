@@ -14,11 +14,33 @@
       "ALLOWED_HOSTS": "finance.karynxt.xyz,.amazonaws.com,localhost,127.0.0.1"
     },
     "exclude": [
-      ".git", ".gitignore", ".env", "**/__pycache__", "**/*.pyc", "tests/**", "venv/**", ".pytest_cache/**", "*.md", "infra/**", ".terraform/**", "./cache/**", "./data/**", "./media/**", "db.sqlite3", "*.xlsx", "*.csv", "key.json"
+      ".git",
+      ".gitignore",
+      ".env",
+      "**/__pycache__",
+      "**/*.pyc",
+      "tests/**",
+      "venv/**",
+      ".pytest_cache/**",
+      "*.md",
+      "infra/**",
+      ".terraform/**",
+      "*.csv",
+      "*.xlsx",
+      "key.json",
+      "*.txt",
+      ".DS_Store",
+      ".vscode/**",
+      ".idea/**",
+      "db.sqlite3",
+      "./cache/**",
+      "./data/**",
+      "./media/**"
     ],
     "slim_handler": true,
+    "use_precompiled_packages": true,
     "lambda_layers": [],
     "keep_warm": false,
-    "use_precompiled_packages": true
+    "ephemeral_storage": {"Size": 2048}
   }
 }
