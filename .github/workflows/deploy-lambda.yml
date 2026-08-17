@@ -57,7 +57,7 @@ jobs:
             -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
             -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="zappa_api_gateway_id="
+            -var="zappa_api_gateway_id=zmw0rzjibg"
 
       - name: Capture Terraform outputs
         id: tf
