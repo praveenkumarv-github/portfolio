@@ -95,6 +95,11 @@ jobs:
           prod["runtime"] = "python3.11"
           prod["slim_handler"] = True
           prod["use_precompiled_packages"] = True
+          prod["precompiled_packages"] = [
+              "numpy",
+              "pandas",
+              "pysqlite3-binary"
+          ]
           prod["ephemeral_storage"] = {"Size": 2048}
           prod["exclude"] = [
                         "*.csv", 
