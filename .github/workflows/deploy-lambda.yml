@@ -43,6 +43,15 @@ jobs:
 
       - name: Install deploy dependencies (Linux build)
         run: |
+          # 1. Create the virtual environment
+          python -m venv venv
+          
+          # 2. Tell GitHub Actions to use this venv for all future steps
+          echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
+          echo "$(pwd)/venv/bin" >> $GITHUB_PATH
+          
+          # 3. Activate and install dependencies
+          source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements-deploy.txt
 
