@@ -19,6 +19,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    container:
+      image: public.ecr.aws/lambda/python:3.11
     env:
       AWS_REGION: ap-south-1
       TF_IN_AUTOMATION: true
@@ -27,13 +29,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform (on host)
+        run: |
+          echo "Installing Terraform on host..."
+          apt-get update -qq
+          apt-get install -y -qq wget unzip
+          cd /tmp
+          wget -q https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip
+          unzip -q terraform_1.5.0_linux_amd64.zip
+          mv terraform /usr/local/bin/
+          terraform version
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -41,23 +46,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install deploy dependencies (clean venv)
+      - name: Install deploy dependencies (Amazon Linux)
         run: |
-          # Clean any stale venv
-          rm -rf venv/
-          
-          # Create fresh virtual environment
-          python -m venv venv
-          
-          # Export to $GITHUB_ENV so ALL future steps use this venv
-          echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
-          echo "$(pwd)/venv/bin" >> $GITHUB_PATH
-          
-          # Upgrade pip/setuptools/wheel FIRST
-          source venv/bin/activate
+          # Already in Python 3.11 Lambda container
           python -m pip install --upgrade pip setuptools wheel
-          
-          # Install requirements (will respect venv)
           pip install -r requirements-deploy.txt
 
       - name: Terraform Phase 1 (base infra)
@@ -100,9 +92,10 @@ jobs:
           prod["runtime"] = "python3.11"
           prod["slim_handler"] = True
           prod["use_precompiled_packages"] = True
-          prod["ephemeral_storage"] = {"Size": 2048}
+          prod["ephemeral_storage"] = {"Size": 3072}
+          prod["zip_repo"] = False
           
-          # Ensure exclude array is comprehensive
+          # Comprehensive exclude list
           prod["exclude"] = [
               ".git",
               ".gitignore",
@@ -121,7 +114,12 @@ jobs:
               "key.json",
               ".DS_Store",
               ".vscode/**",
-              ".idea/**"
+              ".idea/**",
+              "db.sqlite3",
+              "./cache/**",
+              "./data/**",
+              "./media/**",
+              "manage.py"
           ]
 
           role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
@@ -164,22 +162,27 @@ jobs:
             --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
             --secret-string "$GOOGLE_SA_JSON"
 
+      - name: Clean Zappa cache
+        run: |
+          rm -rf .zappa* venv pip-cache
+          echo "✅ Cleared old Zappa cache"
+
       - name: Deploy or update with Zappa
         run: |
           set -e
-          # Zappa MUST run in the venv we created
-          source venv/bin/activate
+          python -m pip install zappa --upgrade
           
           if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
+            echo "Updating existing Lambda..."
             python -m zappa.cli update "$ZAPPA_STAGE"
           else
+            echo "Deploying new Lambda..."
             python -m zappa.cli deploy "$ZAPPA_STAGE"
           fi
 
       - name: Get API Gateway ID from Zappa status
         id: apigw
         run: |
-          source venv/bin/activate
           python -m zappa.cli status "$ZAPPA_STAGE" | tee /tmp/zappa_status_live.txt
           URL=$(grep -Eo 'https://[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/[a-zA-Z0-9_-]+' /tmp/zappa_status_live.txt | head -n1)
           if [ -z "$URL" ]; then
@@ -209,5 +212,4 @@ jobs:
         if: failure()
         run: |
           echo "Deployment failed. Fetching CloudWatch logs..."
-          source venv/bin/activate
           python -m zappa.cli tail "$ZAPPA_STAGE" --since 10m || true

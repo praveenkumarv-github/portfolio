@@ -35,12 +35,14 @@
       "db.sqlite3",
       "./cache/**",
       "./data/**",
-      "./media/**"
+      "./media/**",
+      "manage.py"
     ],
     "slim_handler": true,
     "use_precompiled_packages": true,
     "lambda_layers": [],
     "keep_warm": false,
-    "ephemeral_storage": {"Size": 2048}
+    "ephemeral_storage": {"Size": 3072},
+    "zip_repo": false
   }
 }
