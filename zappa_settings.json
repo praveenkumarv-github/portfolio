@@ -14,24 +14,7 @@
       "ALLOWED_HOSTS": "finance.karynxt.xyz,.amazonaws.com,localhost,127.0.0.1"
     },
     "exclude": [
-      ".git",
-      ".gitignore",
-      ".env",
-      "**/__pycache__",
-      "**/*.pyc",
-      "tests/**",
-      "venv/**",
-      ".pytest_cache/**",
-      "*.md",
-      "infra/**",
-      ".terraform/**",
-      "./cache/**",
-      "./data/**",
-      "./media/**",
-      "db.sqlite3",
-      "*.xlsx",
-      "*.csv",
-      "key.json"
+      ".git", ".gitignore", ".env", "**/__pycache__", "**/*.pyc", "tests/**", "venv/**", ".pytest_cache/**", "*.md", "infra/**", ".terraform/**", "./cache/**", "./data/**", "./media/**", "db.sqlite3", "*.xlsx", "*.csv", "key.json"
     ],
     "slim_handler": false,
     "keep_warm": false,
