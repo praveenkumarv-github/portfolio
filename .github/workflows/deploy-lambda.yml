@@ -95,6 +95,12 @@ jobs:
           prod["runtime"] = "python3.11"
           prod["slim_handler"] = True
           prod["use_precompiled_packages"] = True
+          prod["ephemeral_storage"] = {"size": 2048}
+          prod["exclude"] = [
+                        "*.csv", 
+                        "venv", 
+                        ".git"
+                    ]
 
           role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
           bucket = os.environ.get("TF_S3_BUCKET", "").strip()
