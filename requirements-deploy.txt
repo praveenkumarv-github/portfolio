@@ -19,7 +19,7 @@ numpy>=2.0.0
 pandas>=2.0.0
 
 # SQLite fix (MUST come early in resolution order)
-pysqlite3-binary>=3.45.0
+pysqlite3-binary
 
 # Web scraping
 requests==2.34.2
