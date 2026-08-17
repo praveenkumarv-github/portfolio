@@ -1,0 +1,92 @@
+name: Destroy Lambda App
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: "Type 'DESTROY' to confirm full teardown"
+        required: true
+        default: ""
+      zappa_stage:
+        description: "Zappa stage to undeploy"
+        required: true
+        default: "production"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      TF_IN_AUTOMATION: true
+      ZAPPA_STAGE: ${{ github.event.inputs.zappa_stage }}
+    steps:
+      - name: Safety Check
+        run: |
+          if [ "${{ github.event.inputs.confirm_destroy }}" != "DESTROY" ]; then
+            echo "❌ Destruction aborted: You must type 'DESTROY' in the confirmation box."
+            exit 1
+          fi
+          echo "⚠️ Proceeding with infrastructure destruction..."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          echo "VIRTUAL_ENV=$(pwd)/venv" >> $GITHUB_ENV
+          echo "$(pwd)/venv/bin" >> $GITHUB_PATH
+          source venv/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          
+          # Only Zappa and boto3 are needed for the undeploy command
+          pip install zappa boto3
+
+      - name: Undeploy Zappa (Lambda & API Gateway)
+        run: |
+          source venv/bin/activate
+          
+          # We run status to see if the deployment exists before trying to undeploy
+          if python -m zappa.cli status "$ZAPPA_STAGE" >/tmp/zappa_status.txt 2>&1; then
+            echo "🗑️ Existing deployment found. Undeploying..."
+            python -m zappa.cli undeploy "$ZAPPA_STAGE" --yes
+          else
+            echo "✅ No active Zappa deployment found. Skipping undeploy."
+          fi
+
+      - name: Terraform Destroy (Infrastructure)
+        working-directory: infra
+        run: |
+          terraform init
+          
+          # Using -refresh=false here is sometimes necessary during destroy if 
+          # Zappa already deleted resources Terraform was tracking, but generally
+          # standard destroy is safest.
+          terraform destroy -auto-approve \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
+            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
+            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
+            -var="aws_region=${{ env.AWS_REGION }}" \
+            -var="zappa_api_gateway_id=" \
+            -var="enable_github_oidc_role=true" \
+            -var="github_owner=praveenkumarv-github" \
+            -var="github_repo=portfolio"
