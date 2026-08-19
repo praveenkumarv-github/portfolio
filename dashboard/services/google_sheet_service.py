@@ -25,10 +25,12 @@ import json
 import logging
 import os
 import tempfile
+from functools import lru_cache
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .url_utils import extract_google_sheet_id
+from .workbook_validation import InvalidWorkbookError, validate_xlsx
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,30 @@ class GoogleSheetAccessError(GoogleSheetError):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=1)
+def _load_service_account_json() -> str:
+    direct_value = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if direct_value:
+        return direct_value
+
+    secret_id = os.environ.get("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", "").strip()
+    if not secret_id:
+        return ""
+
+    try:
+        import boto3
+        from botocore.config import Config
+
+        client = boto3.client(
+            "secretsmanager",
+            region_name=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"),
+            config=Config(connect_timeout=2, read_timeout=2, retries={"max_attempts": 2}),
+        )
+        return client.get_secret_value(SecretId=secret_id).get("SecretString", "").strip()
+    except Exception as exc:
+        logger.warning("[GSheet] service-account secret unavailable: %s", type(exc).__name__)
+        return ""
+
 def _save_to_temp(payload: bytes) -> str:
     """Write bytes to a prefixed temp .xlsx; return path."""
     tmp = tempfile.NamedTemporaryFile(prefix="gsheet_", suffix=".xlsx", delete=False)
@@ -57,6 +83,14 @@ def _save_to_temp(payload: bytes) -> str:
     finally:
         tmp.close()
     return tmp.name
+
+
+def _validate_xlsx(payload: bytes) -> None:
+    """Reject oversized, malformed, or unsafe workbook responses."""
+    try:
+        validate_xlsx(payload)
+    except InvalidWorkbookError as exc:
+        raise GoogleSheetAccessError("Downloaded response is not a valid XLSX file") from exc
 
 
 def _fetch_private(sheet_id: str) -> bytes:
@@ -78,7 +112,7 @@ def _fetch_private(sheet_id: str) -> bytes:
             "pip install google-auth google-auth-httplib2 google-api-python-client"
         ) from exc
 
-    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    raw = _load_service_account_json()
     if not raw:
         raise GoogleSheetError("GOOGLE_SERVICE_ACCOUNT_JSON env var is empty")
 
@@ -105,7 +139,7 @@ def _fetch_private(sheet_id: str) -> bytes:
         while not done:
             _, done = downloader.next_chunk()
         payload = buf.getvalue()
-        logger.info("[GSheet][private] fetched %d bytes for sheet %s", len(payload), sheet_id)
+        logger.info("[GSheet][private] fetched %d bytes", len(payload))
         return payload
     except Exception as exc:
         msg = str(exc).lower()
@@ -179,18 +213,24 @@ def fetch_google_sheet(sheet_url: str) -> str:
     except ValueError as exc:
         raise InvalidGoogleSheetUrl("Invalid Google Sheet URL") from exc
 
-    use_private = bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip())
+    use_private = bool(_load_service_account_json())
 
     if use_private:
-        logger.info("[GSheet] private mode — sheet %s", sheet_id)
-        payload = _fetch_private(sheet_id)
+        logger.info("[GSheet] attempting private export")
+        try:
+            payload = _fetch_private(sheet_id)
+            _validate_xlsx(payload)
+        except GoogleSheetError as exc:
+            logger.warning(
+                "[GSheet] private export unavailable (%s); trying public export",
+                type(exc).__name__,
+            )
+            payload = _fetch_public(sheet_id)
+            _validate_xlsx(payload)
     else:
-        logger.info("[GSheet] public mode — sheet %s", sheet_id)
+        logger.info("[GSheet] attempting public export")
         payload = _fetch_public(sheet_id)
-
-    # XLSX is a ZIP container — valid payload starts with b"PK"
-    if not payload or not payload.startswith(b"PK"):
-        raise GoogleSheetAccessError("Sheet not publicly accessible")
+        _validate_xlsx(payload)
 
     path = _save_to_temp(payload)
     if not os.path.exists(path):

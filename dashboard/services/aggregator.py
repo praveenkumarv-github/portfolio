@@ -33,20 +33,17 @@ def _cache_hit(file_path: str, mtime: float) -> bool:
 
 def _capture_snapshot(portfolio) -> None:
     """Upsert monthly snapshot from the portfolio summary only."""
-    try:
-        NetWorthSnapshot.objects.update_or_create(
-            month=datetime.now().strftime("%Y-%m"),
-            defaults={
-                "total_net_worth": portfolio.net_worth,
-                "mutual_funds": portfolio.mf_total,
-                "retirement": portfolio.retirement_total,
-                "liquid": portfolio.liquid_total,
-                "emergency_fund": portfolio.emergency_fund_total,
-                "metals": portfolio.metals_total,
-            },
-        )
-    except Exception:
-        pass
+    NetWorthSnapshot.objects.update_or_create(
+        month=datetime.now().strftime("%Y-%m"),
+        defaults={
+            "total_net_worth": portfolio.net_worth,
+            "mutual_funds": portfolio.mf_total,
+            "retirement": portfolio.retirement_total,
+            "liquid": portfolio.liquid_total,
+            "emergency_fund": portfolio.emergency_fund_total,
+            "metals": portfolio.metals_total,
+        },
+    )
 
 
 def _build_payload(file_path: str) -> Dict[str, Any]:

@@ -21,6 +21,12 @@ variable "project" {
   default     = "finance-dash"
 }
 
+variable "zappa_project_name" {
+  description = "Zappa project name used as the Lambda and CloudFormation name prefix"
+  type        = string
+  default     = "portfolio"
+}
+
 variable "environment" {
   description = "Deployment environment label"
   type        = string

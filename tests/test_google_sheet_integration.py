@@ -63,7 +63,8 @@ class TestGoogleSheetIntegration:
             assert "Google Sheet loaded successfully." in msg_text
             last = FileUploadHistory.objects.first()
             assert last is not None
-            assert "latest_gsheet.xlsx" in last.file_path
+            assert os.path.basename(last.file_path).startswith("gsheet_")
+            assert os.path.exists(last.file_path)
         finally:
             if os.path.exists(gsheet_path):
                 os.unlink(gsheet_path)
@@ -90,10 +91,36 @@ class TestGoogleSheetIntegration:
         request = RequestFactory().post("/load-google-sheet/", {"sheet_url": "https://docs.google.com/spreadsheets/d/fail/edit"})
         setattr(request, "session", {})
         setattr(request, "_messages", FallbackStorage(request))
-        with patch("dashboard.views.fetch_google_sheet", side_effect=GoogleSheetError("network")):
+        with patch("dashboard.views.open_google_sheet", side_effect=GoogleSheetError("network")):
             resp = load_google_sheet(request)
         assert resp.status_code == 302
         assert "Failed to fetch data" in [m.message for m in get_messages(request)]
+
+    def test_repeated_google_sheet_load_replaces_old_file(self, tmp_path, settings):
+        settings.MEDIA_ROOT = str(tmp_path)
+        gsheet_path = _build_excel_file()
+        try:
+            for _ in range(2):
+                request = RequestFactory().post(
+                    "/load-google-sheet/",
+                    {"sheet_url": "https://docs.google.com/spreadsheets/d/abc123/edit"},
+                )
+                setattr(request, "session", {})
+                setattr(request, "_messages", FallbackStorage(request))
+                with patch(
+                    "dashboard.views.open_google_sheet",
+                    return_value=_fake_open_google_sheet(gsheet_path),
+                ):
+                    load_google_sheet(request)
+                current_path = FileUploadHistory.objects.get().file_path
+                assert os.path.exists(current_path)
+                if "first_path" in locals():
+                    assert current_path != first_path
+                    assert not os.path.exists(first_path)
+                first_path = current_path
+        finally:
+            if os.path.exists(gsheet_path):
+                os.unlink(gsheet_path)
 
     def test_excel_upload_still_works(self, tmp_path):
         content = _build_excel_bytes()
@@ -114,6 +141,22 @@ class TestGoogleSheetIntegration:
         last = FileUploadHistory.objects.first()
         assert last is not None
         assert os.path.exists(last.file_path)
+
+    def test_disguised_non_xlsx_upload_is_rejected(self, tmp_path):
+        upload = SimpleUploadedFile(
+            "portfolio.xlsx",
+            b"this is not an xlsx archive",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        request = RequestFactory().post("/upload/", {"excel_file": upload})
+        setattr(request, "session", {})
+        setattr(request, "_messages", FallbackStorage(request))
+        with override_settings(MEDIA_ROOT=str(tmp_path)):
+            response = upload_file(request)
+
+        assert response.status_code == 302
+        assert FileUploadHistory.objects.count() == 0
+        assert any("valid .xlsx" in m.message for m in get_messages(request))
 
     def test_parsing_identical_for_google_and_excel_sources(self):
         from dashboard.services.aggregator import build_dashboard_context, clear_dashboard_cache

@@ -1,6 +1,5 @@
 locals {
-  # Allows wildcard branch matching so any branch from your repo can deploy
-  github_sub = "repo:${var.github_owner}/${var.github_repo}:*"
+  github_sub = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -36,7 +35,7 @@ data "aws_iam_policy_document" "github_actions_assume" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:*"]
+      values   = [local.github_sub]
     }
   }
 }
@@ -70,8 +69,8 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:DeletePolicy",
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
-      "iam:ListPolicyVersions",             # Added to prevent destruction errors
-      "iam:ListInstanceProfilesForRole",    # Added to prevent destruction errors
+      "iam:ListPolicyVersions",          # Added to prevent destruction errors
+      "iam:ListInstanceProfilesForRole", # Added to prevent destruction errors
       "iam:ListAttachedRolePolicies",
       "iam:ListRolePolicies",
       "iam:TagRole",

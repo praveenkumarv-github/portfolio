@@ -11,11 +11,11 @@ from dashboard.models import FileUploadHistory
 from dashboard.views import dashboard_view
 
 
-def _build_excel() -> str:
+def _build_excel(fund_name: str = "Fund A") -> str:
     tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
     tmp.close()
     with pd.ExcelWriter(tmp.name, engine="openpyxl") as w:
-        pd.DataFrame([{"FundName": "Fund A", "Units": 100.0, "Identifier": "119551"}]).to_excel(w, sheet_name="MutualFunds", index=False)
+        pd.DataFrame([{"FundName": fund_name, "Units": 100.0, "Identifier": "119551"}]).to_excel(w, sheet_name="MutualFunds", index=False)
         pd.DataFrame([{"Type": "EPF", "Amount": 500000}]).to_excel(w, sheet_name="Retirement", index=False)
         pd.DataFrame([{"AccountName": "SBI", "Type": "Savings", "Amount": 120000}]).to_excel(w, sheet_name="Liquid", index=False)
         pd.DataFrame([{"AccountName": "FD", "Type": "FD", "Amount": 200000, "MaturityDate": "2026-12-31"}]).to_excel(w, sheet_name="EmergencyFund", index=False)
@@ -52,6 +52,30 @@ class TestDashboardUI:
             assert "id=\"metBladeChart\"" in body
             assert "id=\"riskBladeChart\"" in body
             assert "function toggleBlade" in body
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_workbook_labels_cannot_break_out_of_json_script(self):
+        malicious_name = "</script><script>alert('xss')</script>"
+        path = _build_excel(malicious_name)
+        FileUploadHistory.objects.create(file_path=path)
+
+        try:
+            request = RequestFactory().get("/")
+            setattr(request, "session", {})
+            setattr(request, "_messages", FallbackStorage(request))
+            with patch("dashboard.services.excel_parser.get_nav_service") as nav_factory:
+                nav_factory.return_value.get_nav.return_value = (50.0, "AMFI (mock)")
+                with patch(
+                    "dashboard.services.excel_parser.get_metal_price",
+                    side_effect=lambda metal: (9000.0, "Live") if metal.lower() == "gold" else (110.0, "Live"),
+                ):
+                    response = dashboard_view(request)
+
+            body = response.content.decode("utf-8")
+            assert malicious_name not in body
+            assert "\\u003C/script\\u003E" in body
         finally:
             if os.path.exists(path):
                 os.unlink(path)

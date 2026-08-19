@@ -1,5 +1,6 @@
 {
   "production": {
+    "project_name": "portfolio",
     "app_function": "finance_dashboard.wsgi_lambda.application",
     "aws_region": "ap-south-1",
     "s3_bucket": "finance-dash-zappa-prod",
@@ -10,8 +11,7 @@
     "django_settings": "finance_dashboard.settings_lambda",
     "environment_variables": {
       "DJANGO_SETTINGS_MODULE": "finance_dashboard.settings_lambda",
-      "DJANGO_SECRET_KEY": "django-insecure-financial-dashboard-prod-key",
-      "ALLOWED_HOSTS": "finance.karynxt.xyz,.amazonaws.com,localhost,127.0.0.1"
+      "ALLOWED_HOSTS": "finance.karynxt.xyz,.amazonaws.com"
     },
     "exclude": [
       ".git",

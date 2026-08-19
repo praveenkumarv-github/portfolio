@@ -90,7 +90,7 @@ input[type=url]{width:320px;max-width:100%}
       {% if file_info %}<div class="meta">Source: {{ file_info.source }} | Last loaded: {{ file_info.uploaded_at|date:"d M Y H:i" }}{% if file_info.source == 'Local File' %} | {{ file_info.filename }}{% endif %}</div>{% endif %}
     </div>
     <div class="actions">
-      {% if file_info %}<a href="{% url 'update_metal_prices' %}?refresh=1" class="btn">Refresh Prices</a>{% endif %}
+      {% if file_info %}<form method="post" action="{% url 'update_metal_prices' %}">{% csrf_token %}<input type="hidden" name="action" value="refresh"><button type="submit" class="btn">Refresh Prices</button></form>{% endif %}
       <form method="post" action="{% url 'load_google_sheet' %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="url" name="sheet_url" placeholder="Paste Google Sheet URL" required><button type="submit" class="btn btn-pr">Load from Google Sheet</button></form>
       <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">{% csrf_token %}<input type="file" name="excel_file" accept=".xlsx" required><button type="submit" class="btn">Upload Excel</button></form>
     </div>
@@ -152,7 +152,7 @@ input[type=url]{width:320px;max-width:100%}
     <div class="blade" id="blade-emergency_fund"><div class="blade-head" onclick="toggleBlade('blade-emergency_fund')"><span>EF</span><span class="blade-name">Emergency Fund</span><span class="blade-val">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</span><span class="chev" id="chev-blade-emergency_fund">▼</span></div><div class="blade-body" id="body-blade-emergency_fund"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="efBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th>Maturity</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.emergency_fund %}<tr><td>{{ x.account_name }}</td><td>{{ x.type }}</td><td>{{ x.maturity_date|default:'-' }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
 
     <div class="blade" id="blade-metals"><div class="blade-head" onclick="toggleBlade('blade-metals')"><span>MT</span><span class="blade-name">Metals</span><span class="blade-val">₹{{ portfolio.metals_total|floatformat:0 }}</span><span class="chev" id="chev-blade-metals">▼</span></div><div class="blade-body" id="body-blade-metals"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Gold vs Silver</div><div class="blade-chart"><canvas id="metBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Qty</th><th class="r">Price/g</th><th class="r">Value</th></tr></thead><tbody>{% for x in portfolio.metals %}<tr><td>{{ x.type }}<div class="sub">{{ x.price_source }}</div></td><td class="r">{{ x.quantity|floatformat:2 }}</td><td class="r">₹{{ x.price_per_gram|floatformat:0 }}</td><td class="r">₹{{ x.value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.metals_total|floatformat:0 }}</td></tr></tfoot></table>
-      <form method="post" action="{% url 'update_metal_prices' %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">{% csrf_token %}<input type="number" name="gold_price" placeholder="Gold /g" step="1" min="1001"><input type="number" name="silver_price" placeholder="Silver /g" step="0.5" min="11"><button type="submit" class="btn">Set Manual</button><a href="{% url 'update_metal_prices' %}?refresh=1" class="btn">Auto Fetch</a></form>
+      <form method="post" action="{% url 'update_metal_prices' %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">{% csrf_token %}<input type="number" name="gold_price" placeholder="Gold /g" step="1" min="1001"><input type="number" name="silver_price" placeholder="Silver /g" step="0.5" min="11"><button type="submit" class="btn">Set Manual</button></form><form method="post" action="{% url 'update_metal_prices' %}" style="margin-top:6px">{% csrf_token %}<input type="hidden" name="action" value="refresh"><button type="submit" class="btn">Auto Fetch</button></form>
       </div></div></div></div>
 
     <div class="blade" id="blade-risk"><div class="blade-head" onclick="toggleBlade('blade-risk')"><span>RM</span><span class="blade-name">Risk Management</span><span class="blade-val">₹{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span><span class="chev" id="chev-blade-risk">▼</span></div><div class="blade-body" id="body-blade-risk"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Coverage Mix</div><div class="blade-chart"><canvas id="riskBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Coverage</th><th class="r">Premium</th><th class="r">Status</th></tr></thead><tbody>{% for x in portfolio.risk_rows %}<tr><td>{{ x.type }}</td><td class="r">₹{{ x.coverage|floatformat:0 }}</td><td class="r">₹{{ x.premium|floatformat:0 }}</td><td class="r"><span class="badge {{ x.status_level }}">{{ x.status }}</span></td></tr>{% endfor %}</tbody></table></div></div></div></div>
@@ -160,6 +160,16 @@ input[type=url]{width:320px;max-width:100%}
   {% else %}<div class="empty">No data loaded. Load from Google Sheet or upload an Excel file to render the cockpit.</div>{% endif %}
 </div>
 
+{% if portfolio %}
+{{ portfolio.allocation_chart|json_script:"allocation-data" }}
+{{ snapshots|json_script:"snapshot-data" }}
+{{ portfolio.mf_chart|json_script:"mf-chart-data" }}
+{{ portfolio.mf_split_chart|json_script:"mf-split-chart-data" }}
+{{ portfolio.liquid_chart|json_script:"liquid-chart-data" }}
+{{ portfolio.ef_chart|json_script:"ef-chart-data" }}
+{{ portfolio.metals_chart|json_script:"metals-chart-data" }}
+{{ portfolio.risk_chart|json_script:"risk-chart-data" }}
+{% endif %}
 <script>
 function toggleBlade(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(!b)return;var o=b.classList.contains('open');b.classList.toggle('open',!o);if(c){c.style.transform=o?'':'rotate(-90deg)';}}
 document.addEventListener('DOMContentLoaded',function(){['blade-mutual_funds','blade-risk'].forEach(function(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(b&&!b.classList.contains('open')){b.classList.add('open');if(c){c.style.transform='rotate(-90deg)';}}});});
@@ -174,22 +184,29 @@ const barLabels={id:'barLabels',afterDatasetsDraw(chart){const{ctx}=chart;const 
 function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){const el=document.getElementById(id);if(!el||!labels||!labels.length)return;new Chart(el,{type:'doughnut',data:{labels:labels,datasets:[{data:values,backgroundColor:colours,borderColor:'#fff',borderWidth:1}]},plugins:plugins,options:{responsive:responsive,cutout:'58%',maintainAspectRatio:responsive,plugins:{legend:{position:'bottom',labels:{boxWidth:9,font:{size:10},color:'#5e6783',padding:10}},tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return ctx.label+': '+inr(ctx.parsed)+' ('+pct(ctx.parsed,t)+'%)';}}}}}});if(!responsive){el.height=h;}}
 
 (function(){
-  const labels={{ portfolio.allocation_chart.labels|safe }};
-  const values={{ portfolio.allocation_chart.values|safe }};
-  const colours={{ portfolio.allocation_chart.colours|safe }};
+  const allocation=JSON.parse(document.getElementById('allocation-data').textContent);
+  const labels=allocation.labels;
+  const values=allocation.values;
+  const colours=allocation.colours;
   mkDoughnut('allocChart',labels,values,colours,true,260,[pieValueLabels]);
 
   new Chart(document.getElementById('cmpChart'),{type:'bar',data:{labels:labels,datasets:[{data:values,backgroundColor:colours,borderRadius:5}]},plugins:[barLabels],options:{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){const t=ctx.dataset.data.reduce((a,b)=>a+b,0);return inr(ctx.parsed.x)+' ('+pct(ctx.parsed.x,t)+'%)';}}}},scales:{x:{ticks:{color:'#76809a',font:{size:9}},grid:{color:'#eceff7'}},y:{ticks:{color:'#505b77',font:{size:11}},grid:{display:false}}}}});
 
-  const snaps={{ snapshots|safe }};
+  const snaps=JSON.parse(document.getElementById('snapshot-data').textContent);
   new Chart(document.getElementById('trendChart'),{type:'line',data:{labels:snaps.map(s=>s.month),datasets:[{label:'Net Worth',data:snaps.map(s=>s.total_net_worth),borderColor:'#2f6fed',backgroundColor:'rgba(47,111,237,.08)',fill:true,tension:.35,pointRadius:2}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>inr(ctx.parsed.y)}}},scales:{x:{ticks:{color:'#76809a',font:{size:9}},grid:{color:'#eceff7'}},y:{ticks:{color:'#76809a',font:{size:9},callback:v=>inr(v)},grid:{color:'#eceff7'}}}}});
 
-  mkDoughnut('mfBladeChart',{{ portfolio.mf_chart.labels|safe }},{{ portfolio.mf_chart.values|safe }},{{ portfolio.mf_chart.colours|safe }},false,160,[]);
-  mkDoughnut('mfSplitChart',{{ portfolio.mf_split_chart.labels|safe }},{{ portfolio.mf_split_chart.values|safe }},{{ portfolio.mf_split_chart.colours|safe }},false,140,[]);
-  mkDoughnut('liqBladeChart',{{ portfolio.liquid_chart.labels|safe }},{{ portfolio.liquid_chart.values|safe }},{{ portfolio.liquid_chart.colours|safe }},false,160,[]);
-  mkDoughnut('efBladeChart',{{ portfolio.ef_chart.labels|safe }},{{ portfolio.ef_chart.values|safe }},{{ portfolio.ef_chart.colours|safe }},false,160,[]);
-  mkDoughnut('metBladeChart',{{ portfolio.metals_chart.labels|safe }},{{ portfolio.metals_chart.values|safe }},{{ portfolio.metals_chart.colours|safe }},false,160,[]);
-  mkDoughnut('riskBladeChart',{{ portfolio.risk_chart.labels|safe }},{{ portfolio.risk_chart.values|safe }},{{ portfolio.risk_chart.colours|safe }},false,160,[]);
+  const mfChart=JSON.parse(document.getElementById('mf-chart-data').textContent);
+  const mfSplitChart=JSON.parse(document.getElementById('mf-split-chart-data').textContent);
+  const liquidChart=JSON.parse(document.getElementById('liquid-chart-data').textContent);
+  const efChart=JSON.parse(document.getElementById('ef-chart-data').textContent);
+  const metalsChart=JSON.parse(document.getElementById('metals-chart-data').textContent);
+  const riskChart=JSON.parse(document.getElementById('risk-chart-data').textContent);
+  mkDoughnut('mfBladeChart',mfChart.labels,mfChart.values,mfChart.colours,false,160,[]);
+  mkDoughnut('mfSplitChart',mfSplitChart.labels,mfSplitChart.values,mfSplitChart.colours,false,140,[]);
+  mkDoughnut('liqBladeChart',liquidChart.labels,liquidChart.values,liquidChart.colours,false,160,[]);
+  mkDoughnut('efBladeChart',efChart.labels,efChart.values,efChart.colours,false,160,[]);
+  mkDoughnut('metBladeChart',metalsChart.labels,metalsChart.values,metalsChart.colours,false,160,[]);
+  mkDoughnut('riskBladeChart',riskChart.labels,riskChart.values,riskChart.colours,false,160,[]);
 })();
 {% endif %}
 </script>

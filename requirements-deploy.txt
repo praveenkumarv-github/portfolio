@@ -1,7 +1,9 @@
 # Core web framework
-Django==5.0.4
+Django==5.2.16
 asgiref==3.12.1
 sqlparse==0.6.0
+
+-r requirements-lambda-native.txt
 
 # Zappa + AWS
 zappa==0.62.1
@@ -14,12 +16,8 @@ google-auth==2.40.3
 google-auth-httplib2==0.2.0
 google-api-python-client==2.176.0
 
-# Data processing (MUST be after Zappa, before parsing)
-numpy>=2.0.0
-pandas>=2.0.0
-
-# SQLite fix (MUST come early in resolution order)
-pysqlite3-binary
+# Cloudflare Access origin JWT verification
+PyJWT[crypto]==2.13.0
 
 # Web scraping
 requests==2.34.2
@@ -28,6 +26,7 @@ lxml==6.1.1
 soupsieve==2.9.2
 
 # Excel/Office
+defusedxml==0.7.1
 openpyxl==3.1.5
 et_xmlfile==2.0.0
 

@@ -76,7 +76,8 @@ jobs:
             -var="zappa_api_gateway_id=" \
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio"
+            -var="github_repo=portfolio" \
+            -var="github_branch=fea-googlesheet-aws"
 
       - name: Step 2 - Undeploy Zappa App
         run: |

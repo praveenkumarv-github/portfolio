@@ -16,9 +16,14 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: finance-dash-production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
       AWS_REGION: ap-south-1
@@ -58,7 +63,7 @@ jobs:
             --target ./venv/lib/python3.11/site-packages \
             --only-binary=:all: \
             --upgrade \
-            numpy pandas pysqlite3-binary
+            -r requirements-lambda-native.txt
 
       - name: Terraform Phase 1 (base infra)
         if: ${{ github.event.inputs.terraform_apply == 'true' }}
@@ -74,7 +79,8 @@ jobs:
             -var="zappa_api_gateway_id=" \
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio"
+            -var="github_repo=portfolio" \
+            -var="github_branch=fea-googlesheet-aws"
 
       - name: Capture Terraform outputs
         id: tf
@@ -87,78 +93,18 @@ jobs:
       - name: Patch zappa settings for CI package + layers
         run: |
           source venv/bin/activate
-          python - << 'PY'
-          import json
-          import os
-
-          path = "zappa_settings.json"
-          with open(path, "r", encoding="utf-8") as f:
-              cfg = json.load(f)
-
-          stage = os.environ.get("ZAPPA_STAGE", "production")
-          prod = cfg[stage]
-
-          prod["runtime"] = "python3.11"
-          prod["slim_handler"] = True
-          
-          # MUST BE FALSE so Zappa uses our manually downloaded manylinux wheels from above
-          prod["use_precompiled_packages"] = False 
-          prod["ephemeral_storage"] = {"Size": 3072}
-          
-          # Comprehensive exclude list
-          prod["exclude"] = [
-              ".git",
-              ".gitignore",
-              ".env",
-              "**/__pycache__",
-              "**/*.pyc",
-              "tests/**",
-              ".pytest_cache/**",
-              "*.md",
-              "infra/**",
-              ".terraform/**",
-              "*.csv",
-              "*.xlsx",
-              "*.txt",
-              "key.json",
-              ".DS_Store",
-              ".vscode/**",
-              ".idea/**",
-              "db.sqlite3",
-              "cache/**",
-              "data/**",
-              "media/**"
-          ]
-
-          role_arn = os.environ.get("TF_ROLE_ARN", "").strip()
-          bucket = os.environ.get("TF_S3_BUCKET", "").strip()
-          if role_arn:
-              prod["role_arn"] = role_arn
-          if bucket:
-              prod["s3_bucket"] = bucket
-
-          layer_arns_raw = os.environ.get("LAMBDA_LAYER_ARNS", "").strip()
-          if layer_arns_raw:
-              prod["lambda_layers"] = [x.strip() for x in layer_arns_raw.split(",") if x.strip()]
-
-          envs = prod.setdefault("environment_variables", {})
-          if os.environ.get("DJANGO_SECRET_KEY"):
-              envs["DJANGO_SECRET_KEY"] = os.environ["DJANGO_SECRET_KEY"]
-          if os.environ.get("ALLOWED_HOSTS"):
-              envs["ALLOWED_HOSTS"] = os.environ["ALLOWED_HOSTS"]
-          if os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"):
-              envs["GOOGLE_SERVICE_ACCOUNT_JSON"] = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
-
-          with open(path, "w", encoding="utf-8") as f:
-              json.dump(cfg, f, indent=2)
-          PY
+          python scripts/patch_zappa_settings.py
         env:
           TF_ROLE_ARN: ${{ steps.tf.outputs.role_arn }}
           TF_S3_BUCKET: ${{ steps.tf.outputs.s3_bucket }}
           LAMBDA_LAYER_ARNS: ${{ vars.LAMBDA_LAYER_ARNS }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SERVICE_ACCOUNT_SECRET_ID: ${{ vars.GOOGLE_SERVICE_ACCOUNT_SECRET_ID || 'finance-dash/google-service-account' }}
+          CLOUDFLARE_ACCESS_ENABLED: ${{ vars.CLOUDFLARE_ACCESS_ENABLED }}
+          CLOUDFLARE_ACCESS_TEAM_DOMAIN: ${{ vars.CLOUDFLARE_ACCESS_TEAM_DOMAIN }}
+          CLOUDFLARE_ACCESS_AUDIENCE: ${{ secrets.CLOUDFLARE_ACCESS_AUDIENCE }}
+          CLOUDFLARE_ACCESS_ALLOWED_EMAIL: ${{ secrets.CLOUDFLARE_ACCESS_ALLOWED_EMAIL }}
 
       - name: Upsert Google service account secret in Secrets Manager
         if: env.GOOGLE_SA_JSON != ''
@@ -202,6 +148,11 @@ jobs:
             exit 1
           fi
           API_ID=$(echo "$URL" | sed -E 's#https://([a-z0-9]+)\.execute-api\..*#\1#')
+          if [[ ! "$API_ID" =~ ^[a-z0-9]{10,}$ ]]; then
+            echo "Invalid API Gateway ID parsed from zappa status output"
+            exit 1
+          fi
+          echo "Extracted API Gateway ID: $API_ID"
           echo "api_id=$API_ID" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Phase 2 (custom domain mapping)
@@ -218,7 +169,8 @@ jobs:
             -var="zappa_stage_name=${{ env.ZAPPA_STAGE }}" \
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio"
+            -var="github_repo=portfolio" \
+            -var="github_branch=fea-googlesheet-aws"
 
       - name: Fetch CloudWatch Logs on failure
         if: failure()

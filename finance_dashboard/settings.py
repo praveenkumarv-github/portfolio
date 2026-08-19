@@ -5,13 +5,6 @@ Django settings for finance_dashboard project.
 from pathlib import Path
 import os
 
-
-__import__('pysqlite3')
-import sys
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-
-
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -96,9 +89,6 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'dashboard' / 'static',
-]
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
