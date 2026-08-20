@@ -66,5 +66,5 @@ variable "github_repo" {
 variable "github_branch" {
   description = "GitHub branch name allowed to assume OIDC role"
   type        = string
-  default     = "fea-googlesheet-aws"
+  default     = "fea-v2"
 }
