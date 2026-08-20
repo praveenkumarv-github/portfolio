@@ -1,5 +1,5 @@
 locals {
-  github_sub = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
+  github_sub = "repo:praveenkumarv-github@42761154/portfolio@1331139919:ref:refs/heads/fea-v2"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
