@@ -80,7 +80,7 @@ jobs:
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
             -var="github_repo=portfolio" \
-            -var="github_branch=fea-googlesheet-aws"
+            -var="github_branch=fea-v2"
 
       - name: Capture Terraform outputs
         id: tf
@@ -170,7 +170,7 @@ jobs:
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
             -var="github_repo=portfolio" \
-            -var="github_branch=fea-googlesheet-aws"
+            -var="github_branch=fea-v2"
 
       - name: Fetch CloudWatch Logs on failure
         if: failure()
