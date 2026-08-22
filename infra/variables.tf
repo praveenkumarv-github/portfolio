@@ -56,3 +56,15 @@ variable "github_branch" {
   type        = string
   default     = "fea-v2"
 }
+
+variable "github_owner_id" {
+  description = "Immutable GitHub owner/user ID for OIDC trust"
+  type        = string
+  default     = "42761154"
+}
+
+variable "github_repo_id" {
+  description = "Immutable GitHub repository ID for OIDC trust"
+  type        = string
+  default     = "1331139919"
+}
