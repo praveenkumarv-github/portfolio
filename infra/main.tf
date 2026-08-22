@@ -35,28 +35,6 @@ resource "aws_acm_certificate" "dashboard" {
   }
 }
 
-resource "aws_acm_certificate_validation" "dashboard" {
-  certificate_arn         = aws_acm_certificate.dashboard.arn
-  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
-}
-
-resource "aws_api_gateway_domain_name" "dashboard" {
-  domain_name              = "${var.subdomain}.${var.domain_name}"
-  regional_certificate_arn = aws_acm_certificate_validation.dashboard.certificate_arn
-
-  endpoint_configuration {
-    types = ["REGIONAL"]
-  }
-}
-
-resource "aws_api_gateway_base_path_mapping" "dashboard" {
-  count = var.zappa_api_gateway_id != "" ? 1 : 0
-
-  api_id      = var.zappa_api_gateway_id
-  domain_name = aws_api_gateway_domain_name.dashboard.domain_name
-  stage_name  = var.zappa_stage_name
-}
-
 data "aws_iam_policy_document" "lambda_trust" {
   statement {
     effect  = "Allow"
@@ -115,44 +93,6 @@ resource "aws_iam_policy" "lambda_secrets" {
 resource "aws_iam_role_policy_attachment" "lambda_secrets" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = aws_iam_policy.lambda_secrets.arn
-}
-
-# (The Zappa deploy policy from your file remains the same. 
-# Omitted here for brevity, but you should keep the zappa_deploy blocks if you deploy via CI/CD).
-
-resource "aws_route53_zone" "primary" {
-  name = var.domain_name
-}
-
-# ACM DNS validation records
-resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.dashboard.domain_validation_options :
-    dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  zone_id = aws_route53_zone.primary.zone_id
-  name    = each.value.name
-  type    = each.value.type
-  ttl     = 60
-  records = [each.value.record]
-}
-
-# A-record alias → API Gateway custom domain (regional endpoint)
-resource "aws_route53_record" "dashboard" {
-  zone_id = aws_route53_zone.primary.zone_id
-  name    = "${var.subdomain}.${var.domain_name}"
-  type    = "A"
-
-  alias {
-    name                   = aws_api_gateway_domain_name.dashboard.regional_domain_name
-    zone_id                = aws_api_gateway_domain_name.dashboard.regional_zone_id
-    evaluate_target_health = false
-  }
 }
 
 resource "aws_s3_bucket" "deploy" {

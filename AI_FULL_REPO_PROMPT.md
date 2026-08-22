@@ -91,17 +91,18 @@ STATE RULES
   migration, cost, security, backup, and rollback are addressed.
 
 INFRASTRUCTURE OWNERSHIP
-- Terraform owns ACM, Route 53 bootstrap records, API Gateway custom
+- Terraform owns ACM, API Gateway custom
   domain/mapping, execution/deployment IAM, GitHub OIDC, artifact S3, and the
   Secrets Manager resource.
 - Zappa/CloudFormation owns Lambda, REST API/stage/deployment, integration, and
   invoke permission.
 - External/manual ownership includes the Terraform backend bucket, registrar,
-  Cloudflare, and Google identity/service account.
+  Cloudflare zone/Access configuration, and Google identity/service account.
+  Phase 2 manages Cloudflare DNS through a zone-scoped API token.
 - Never create dual ownership between Terraform and Zappa.
-- For deployment changes, trace the complete path:
-  Terraform Phase 1 with empty API ID -> Zappa patch/deploy/update -> API ID
-  extraction/validation -> Terraform Phase 2 mapping.
+- For deployment changes, trace the complete path: baseline Terraform -> Zappa
+  patch/deploy/update -> Cloudflare ACM validation DNS -> API ID discovery ->
+  domain Terraform state -> proxied Cloudflare CNAME.
 - Preserve the Zappa project identity portfolio and production stage unless the
   issue explicitly includes a resource migration plan.
 - Terraform requires version 1.10 or later and native S3 lockfiles.

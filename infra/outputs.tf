@@ -8,9 +8,20 @@ output "s3_bucket" {
   value       = aws_s3_bucket.deploy.bucket
 }
 
-output "route53_nameservers" {
-  description = "IMPORTANT: set these as NS records at your domain registrar"
-  value       = aws_route53_zone.primary.name_servers
+output "acm_certificate_arn" {
+  description = "ACM certificate consumed by the Phase 2 domain stack"
+  value       = aws_acm_certificate.dashboard.arn
+}
+
+output "acm_validation_records" {
+  description = "DNS records that Phase 2 publishes to Cloudflare before validating ACM"
+  value = [
+    for option in aws_acm_certificate.dashboard.domain_validation_options : {
+      name  = option.resource_record_name
+      type  = option.resource_record_type
+      value = option.resource_record_value
+    }
+  ]
 }
 
 output "github_actions_role_arn" {

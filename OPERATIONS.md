@@ -4,8 +4,8 @@
 
 Terraform manages:
 
-- Route 53 hosted zone, ACM validation records, and custom-domain alias.
-- ACM regional certificate and API Gateway custom domain/base-path mapping.
+- ACM regional certificate in the baseline state.
+- API Gateway custom domain/base-path mapping in the independent domain state.
 - Lambda execution role and policies for logs and the Google secret.
 - Private AES-256 encrypted S3 Zappa artifact bucket.
 - Secrets Manager secret for Google service-account JSON.
@@ -18,7 +18,7 @@ Zappa/CloudFormation manages:
 - Lambda invoke permission and supporting Zappa resources.
 - Deployment artifacts written to the Terraform-managed S3 bucket.
 
-External/manual resources include the pre-existing Terraform state bucket, domain registration, Cloudflare zone and Access application, Google identity provider, and Google service account.
+External/manual resources include the pre-existing Terraform state bucket, domain registration, Cloudflare zone and Access application, Google identity provider, and Google service account. The Phase 2 workflow manages Cloudflare DNS records through a zone-scoped API token; Terraform does not own those records.
 
 ## Request and data flow
 
@@ -84,6 +84,25 @@ Current infrastructure writes Lambda logs but does not provision alarms or expli
 
 Avoid adding an unauthenticated health endpoint because it weakens the fail-closed origin boundary.
 
+## Local infrastructure validation (Floci)
+
+The `terraform-floci` job in `validate.yml` and `scripts/floci_terraform_check.sh` apply `infra/` against the [Floci](https://github.com/floci-io/floci) local AWS emulator to catch Terraform regressions without touching real AWS. Terraform AWS provider v5 honours `AWS_ENDPOINT_URL`, so no HCL changes are required.
+
+Run locally:
+
+```bash
+docker compose -f docker-compose.floci.yml up -d
+scripts/floci_terraform_check.sh
+docker compose -f docker-compose.floci.yml down
+```
+
+Scope and limits:
+
+- Validates baseline resources only (IAM role/policies, S3 artifact bucket, Secrets Manager, ACM cert record). `enable_github_oidc_role=false` skips the GitHub OIDC provider whose thumbprints are not meaningful against an emulator.
+- Does not exercise `infra/domain` because `aws_acm_certificate_validation` needs real DNS.
+- Does not exercise Zappa, API Gateway custom domain, or Cloudflare — those require live services.
+- Floci uses in-memory storage, so every run is a fresh account. A green run proves the code applies and destroys cleanly; it does not prove real AWS quota, service-linked-role, or IAM condition behavior.
+
 ## Incident checks
 
 ### Dashboard returns 403
@@ -110,12 +129,12 @@ Avoid adding an unauthenticated health endpoint because it weakens the fail-clos
 
 ## Cost profile
 
-At personal traffic levels, Lambda and API Gateway are usually within free or low usage tiers. Recurring charges primarily come from Route 53 hosted zone, Secrets Manager, S3 storage, and any Cloudflare plan above its free Zero Trust allowance. Review current provider pricing rather than relying on a fixed estimate.
+At personal traffic levels, Lambda and API Gateway are usually within free or low usage tiers. Recurring charges primarily come from Secrets Manager, S3 storage, and any Cloudflare plan above its free Zero Trust allowance. Review current provider pricing rather than relying on a fixed estimate.
 
 ## Known risks
 
 - No durable application database or workbook storage in Lambda.
 - No tenant isolation; design assumes exactly one authorized user.
 - Zappa deployment IAM remains broad because it manages CloudFormation, Lambda, API Gateway, S3, IAM, logs, and events. OIDC limits who can assume it, but further least-privilege work should be based on CloudTrail-observed actions.
-- Terraform state bucket lifecycle, encryption, versioning, and access controls are bootstrap responsibilities outside this stack. Native S3 lockfiles are enabled in `infra/backend.tf` and require Terraform 1.10 or later.
+- Terraform state bucket lifecycle, encryption, versioning, and access controls are bootstrap responsibilities outside this stack. Native S3 lockfiles are enabled for both `prod/terraform.tfstate` and `prod/domain.tfstate` and require Terraform 1.10 or later.
 - GoodReturns HTML changes can force stale/manual metal prices; AMFI/MFAPI availability affects mutual-fund freshness.

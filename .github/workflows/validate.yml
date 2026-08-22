@@ -34,10 +34,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
       - name: Initialize without backend
-        run: terraform -chdir=infra init -backend=false -input=false
+        run: |
+          terraform -chdir=infra init -backend=false -input=false
+          terraform -chdir=infra/domain init -backend=false -input=false
       - name: Validate and format
         run: |
           terraform -chdir=infra validate
+          terraform -chdir=infra/domain validate
           terraform -chdir=infra fmt -check -recursive
 
   lambda-wheels:
@@ -58,3 +61,22 @@ jobs:
             --python-version 3.11 \
             --only-binary=:all: \
             -r requirements-lambda-native.txt
+
+  terraform-floci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      floci:
+        image: floci/floci:latest
+        ports:
+          - 4566:4566
+        env:
+          FLOCI_DEFAULT_REGION: ap-south-1
+          FLOCI_STORAGE_MODE: memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Apply infra/ against Floci
+        run: |
+          chmod +x scripts/floci_terraform_check.sh
+          scripts/floci_terraform_check.sh

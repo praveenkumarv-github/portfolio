@@ -61,23 +61,33 @@ jobs:
           # No heavy C-binaries (pandas/numpy) are needed just to delete the app.
           pip install zappa boto3
 
-      - name: Step 1 - Terraform Unmap Custom Domain
-        working-directory: infra
+      - name: Discover deployed API Gateway ID
+        id: apigw
         run: |
-          terraform init
-          # Passing an empty API ID forces Terraform to detach the custom domain safely
-          # This "unlocks" the API Gateway so Zappa is allowed to delete it.
-          terraform apply -auto-approve \
+          API_ID=$(aws cloudformation describe-stack-resources \
+            --stack-name "portfolio-$ZAPPA_STAGE" \
+            --query "StackResources[?ResourceType=='AWS::ApiGateway::RestApi'].PhysicalResourceId | [0]" \
+            --output text)
+          if [[ ! "$API_ID" =~ ^[a-z0-9]{10,}$ ]]; then
+            echo "Could not find a valid REST API ID in the portfolio-$ZAPPA_STAGE stack"
+            exit 1
+          fi
+          echo "api_id=$API_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Step 1 - Terraform Unmap Custom Domain
+        run: |
+          terraform -chdir=infra init
+          terraform -chdir=infra/domain init
+          ACM_CERTIFICATE_ARN=$(terraform -chdir=infra output -raw acm_certificate_arn)
+          terraform -chdir=infra/domain destroy -auto-approve \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
             -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
             -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="zappa_api_gateway_id=" \
-            -var="enable_github_oidc_role=true" \
-            -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio" \
-            -var="github_branch=fea-googlesheet-aws"
+            -var="acm_certificate_arn=$ACM_CERTIFICATE_ARN" \
+            -var="zappa_api_gateway_id=${{ steps.apigw.outputs.api_id }}" \
+            -var="zappa_stage_name=$ZAPPA_STAGE"
 
       - name: Step 2 - Undeploy Zappa App
         run: |

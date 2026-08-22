@@ -52,7 +52,6 @@ flowchart LR
 flowchart TB
     TF[Terraform] --> ACM[ACM certificate]
     TF --> DOMAIN[API Gateway custom domain and mapping]
-    TF --> R53[Route 53 bootstrap zone and records]
     TF --> IAM[Lambda and GitHub OIDC IAM roles]
     TF --> S3[Encrypted Zappa artifact bucket]
     TF --> SECRET[Secrets Manager secret]
@@ -63,6 +62,7 @@ flowchart TB
 
     EXT[External setup] --> BACKEND[Terraform state S3 bucket]
     EXT --> CF[Cloudflare zone and Access policy]
+    CF --> DNS[ACM validation and dashboard DNS]
     EXT --> GOOGLE[Google identity and service account]
 ```
 
@@ -76,16 +76,17 @@ sequenceDiagram
     participant Z as Zappa
     participant AWS as AWS
 
-    Admin->>TF: Bootstrap Route 53 and apply Phase 1 locally
-    TF->>AWS: Create certificate, domain, IAM, S3, secret, OIDC
+    Admin->>TF: Bootstrap backend and OIDC once
     Admin->>GH: Configure repository secrets and variables
-    Admin->>GH: Run Deploy Lambda App
-    GH->>TF: Reconcile Phase 1 with empty API ID
+    Admin->>GH: Run Phase 1
+    GH->>TF: Reconcile baseline ACM, IAM, S3, and secret
     GH->>Z: Deploy or update portfolio-production
     Z->>AWS: Create Lambda, REST API, and production stage
-    GH->>Z: Read and validate API Gateway ID
-    GH->>TF: Apply Phase 2 with API Gateway ID
-    TF->>AWS: Create custom-domain base-path mapping
+    Admin->>GH: Run Phase 2
+    GH->>CF: Publish unproxied ACM validation CNAME
+    GH->>AWS: Discover and validate API Gateway ID
+    GH->>TF: Apply independent domain state
+    GH->>CF: Publish proxied finance CNAME
 ```
 
 ## What Was Implemented
@@ -237,8 +238,8 @@ runtime cache values.
 
 ## Production Deployment
 
-The production process has one local bootstrap and two automated Terraform
-phases around Zappa.
+The production process has one local IAM/backend bootstrap and two independent,
+rerunnable GitHub workflows.
 
 ### Prerequisites
 
@@ -261,7 +262,7 @@ All examples use:
 | Terraform project | `finance-dash` |
 | Environment | `prod` |
 | Zappa project/stage | `portfolio` / `production` |
-| Allowed GitHub branch | `fea-googlesheet-aws` |
+| Allowed GitHub branch | `fea-v2` |
 
 Replace domain and account-specific values where required. Keep the Zappa
 project name `portfolio` unless intentionally migrating the existing Lambda and
@@ -290,84 +291,33 @@ DynamoDB lock table. If using another AWS account, change the backend bucket in
 `infra/backend.tf` and the matching state-bucket ARNs in
 `infra/github_actions.tf` before initialization.
 
-### Step 1 - Bootstrap DNS locally
+### Step 1 - Bootstrap GitHub OIDC locally
 
-On a brand-new domain, create the Route 53 hosted zone first so its nameservers
-can be delegated before ACM waits for DNS validation:
+GitHub cannot create the IAM role it must already assume. After creating the
+backend bucket, bootstrap the OIDC provider and deployment role once with an
+authenticated local AWS identity:
 
 ```bash
 terraform -chdir=infra init
 terraform -chdir=infra apply \
-  -target=aws_route53_zone.primary \
+  -target=aws_iam_openid_connect_provider.github \
+  -target=aws_iam_role.github_actions_deploy \
+  -target=aws_iam_policy.github_actions_deploy \
+  -target=aws_iam_role_policy_attachment.github_actions_deploy \
   -var="domain_name=karynxt.xyz" \
   -var="github_owner=praveenkumarv-github" \
   -var="github_repo=portfolio" \
-  -var="github_branch=fea-googlesheet-aws"
+  -var="github_branch=fea-v2"
 
-terraform -chdir=infra output route53_nameservers
-```
-
-Set those nameservers at the domain registrar and wait for delegation. The
-targeted apply is only for this first DNS bootstrap; normal operations use a
-full plan/apply.
-
-If the domain is already authoritative in Cloudflare, ACM validation records
-must exist in Cloudflare DNS. The simplest supported first-time sequence is to
-complete Route 53/ACM bootstrap first, then migrate DNS to Cloudflare in Step 6.
-
-### Step 2 - Terraform Phase 1 locally
-
-Phase 1 creates everything Terraform owns except the API Gateway base-path
-mapping. The empty API ID is intentional because Zappa has not created the REST
-API yet.
-
-```bash
-terraform -chdir=infra fmt -check -recursive
-terraform -chdir=infra validate
-
-terraform -chdir=infra plan \
-  -var="domain_name=karynxt.xyz" \
-  -var="subdomain=finance" \
-  -var="project=finance-dash" \
-  -var="environment=prod" \
-  -var="aws_region=ap-south-1" \
-  -var="zappa_api_gateway_id=" \
-  -var="enable_github_oidc_role=true" \
-  -var="github_owner=praveenkumarv-github" \
-  -var="github_repo=portfolio" \
-  -var="github_branch=fea-googlesheet-aws"
-
-terraform -chdir=infra apply \
-  -var="domain_name=karynxt.xyz" \
-  -var="subdomain=finance" \
-  -var="project=finance-dash" \
-  -var="environment=prod" \
-  -var="aws_region=ap-south-1" \
-  -var="zappa_api_gateway_id=" \
-  -var="enable_github_oidc_role=true" \
-  -var="github_owner=praveenkumarv-github" \
-  -var="github_repo=portfolio" \
-  -var="github_branch=fea-googlesheet-aws"
-```
-
-Record the outputs:
-
-```bash
-terraform -chdir=infra output lambda_role_arn
-terraform -chdir=infra output s3_bucket
 terraform -chdir=infra output github_actions_role_arn
 ```
 
-Expected resources include:
+Save that output as `AWS_GITHUB_ACTIONS_ROLE_ARN`. This targeted apply is the
+only local infrastructure phase. Phase 1 completes the baseline state; Phase 2
+uses a separate `prod/domain.tfstate`, so later Phase 1 runs cannot remove the
+custom domain.
 
-- ACM certificate and API Gateway regional custom domain.
-- Route 53 hosted zone, validation records, and alias.
-- Lambda execution role with log and secret-read policies.
-- Private encrypted Zappa artifact bucket.
-- Secrets Manager secret at `finance-dash/google-service-account`.
-- GitHub OIDC provider and branch-scoped deployment role.
-
-### Step 3 - Configure the Google secret
+### Step 2 - Configure the Google secret
 
 For private Sheets, enable Google Drive API, create a service account, and share
 the Sheet with its `client_email` as Viewer.
@@ -384,7 +334,7 @@ The secret value must be the Google JSON object itself, not a path, escaped
 wrapper string, or `{ "note": ... }` placeholder. Public Sheets can use the
 public-export fallback without usable service-account credentials.
 
-### Step 4 - Configure GitHub Actions
+### Step 3 - Configure GitHub Actions
 
 Add these repository secrets under **Settings -> Secrets and variables ->
 Actions -> Secrets**:
@@ -395,6 +345,7 @@ Actions -> Secrets**:
 | `DJANGO_SECRET_KEY` | Long random production-only Django secret |
 | `CLOUDFLARE_ACCESS_AUDIENCE` | Cloudflare Access application AUD tag |
 | `CLOUDFLARE_ACCESS_ALLOWED_EMAIL` | Exact permitted Google email |
+| `CLOUDFLARE_API_TOKEN` | Zone-scoped token with `Zone:DNS:Edit` |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Optional complete Google service-account JSON |
 
 Add these repository variables under **Actions -> Variables**:
@@ -409,31 +360,31 @@ Add these repository variables under **Actions -> Variables**:
 | `GOOGLE_SERVICE_ACCOUNT_SECRET_ID` | `finance-dash/google-service-account` |
 | `CLOUDFLARE_ACCESS_ENABLED` | `true` |
 | `CLOUDFLARE_ACCESS_TEAM_DOMAIN` | `https://<team>.cloudflareaccess.com` |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID for `karynxt.xyz` |
+| `DEPLOY_BRANCH` | `fea-v2` |
 | `LAMBDA_LAYER_ARNS` | Optional comma-separated layer ARNs; normally empty |
 
 The OIDC trust policy only accepts tokens from the configured repository and
 branch. GitHub does not need long-lived AWS access-key secrets.
 
-### Step 5 - Run the Lambda deployment workflow
+### Step 4 - Run Phase 1
 
 Before deployment, confirm the `Validate` workflow passes on the branch.
 
 From GitHub:
 
 1. Open **Actions**.
-2. Select **Deploy Lambda App**.
+2. Select **Phase 1 - Deploy Infrastructure and Lambda**.
 3. Select **Run workflow**.
-4. Choose branch `fea-googlesheet-aws`.
-5. Set `terraform_apply` to `true`.
-6. Set `zappa_stage` to `production`.
-7. Run the workflow.
+4. Choose branch `fea-v2`.
+5. Set `zappa_stage` to `production`.
+6. Run the workflow.
 
 The equivalent GitHub CLI command is:
 
 ```bash
-gh workflow run "Deploy Lambda App" \
-  --ref fea-googlesheet-aws \
-  -f terraform_apply=true \
+gh workflow run "Phase 1 - Deploy Infrastructure and Lambda" \
+  --ref fea-v2 \
   -f zappa_stage=production
 ```
 
@@ -441,38 +392,29 @@ The workflow performs these operations in order:
 
 1. Assumes the AWS deployment role with GitHub OIDC.
 2. Installs Python 3.11 dependencies and Amazon Linux-compatible native wheels.
-3. Reconciles Terraform Phase 1 with an empty API ID.
+3. Reconciles the baseline Terraform state.
 4. Reads Terraform's Lambda role and artifact-bucket outputs.
 5. Patches Zappa settings and validates all required production values.
 6. Optionally upserts the Google credential secret.
 7. Deploys a new Zappa stack or updates the existing one.
 8. Reads and validates the REST API ID from `zappa status`.
-9. Applies Terraform Phase 2 with that ID, creating the custom-domain mapping.
+9. Stops without changing Cloudflare or the custom-domain state.
 
-Use `terraform_apply=false` only for a Zappa-only update when the committed
-`zappa_settings.json` role ARN and bucket already match the target account.
-Normal deployments should keep it `true`.
+### Step 5 - Run Phase 2
 
-### Step 6 - Configure Cloudflare Access
+Run **Phase 2 - Deploy Cloudflare and Domain** after Phase 1 succeeds:
 
-After ACM is validated and the API Gateway custom domain exists:
+```bash
+gh workflow run "Phase 2 - Deploy Cloudflare and Domain" \
+  --ref fea-v2 \
+  -f zappa_stage=production
+```
 
-1. Add the root domain to Cloudflare.
-2. Copy the ACM validation CNAME from Route 53/AWS into Cloudflare DNS with
-   proxying disabled. Keep it permanently for certificate renewal.
-3. Create a CNAME named `finance` pointing to the API Gateway regional custom
-   domain target and enable Cloudflare proxying.
-4. Change the registrar nameservers to Cloudflare's assigned nameservers.
-5. In Cloudflare Zero Trust, configure Google as an identity provider.
-6. Create a self-hosted Access application for `finance.karynxt.xyz`.
-7. Create one Allow policy for the exact approved email, not the whole domain.
-8. Copy the application AUD tag into
-   `CLOUDFLARE_ACCESS_AUDIENCE` and rerun the deployment workflow.
-9. Use a short Access session and require MFA on the Google account.
-
-Once Cloudflare becomes authoritative, Terraform's Route 53 zone and alias are
-retained as bootstrap resources but no longer answer public DNS. Do not delete
-the ACM validation CNAME from Cloudflare.
+The workflow publishes the unproxied ACM validation CNAME, discovers the REST
+API from `portfolio-production`, applies `infra/domain`, and publishes the
+proxied `finance` CNAME. The Cloudflare zone, nameserver delegation, Google
+identity provider, Access application, and exact-email policy remain manual
+prerequisites. Do not delete the ACM validation CNAME after deployment.
 
 ## Verification
 
@@ -506,14 +448,9 @@ return `403 Access denied` without a valid Cloudflare Access JWT.
 
 ### Normal update
 
-Push the tested change to `fea-googlesheet-aws`, wait for `Validate`, then run
-`Deploy Lambda App` with `terraform_apply=true`. Zappa detects the existing
-deployment and runs an update.
-
-### Zappa-only update
-
-Use `terraform_apply=false` only when infrastructure, repository variables, the
-Lambda role ARN, and artifact bucket are unchanged.
+Push the tested change to `fea-v2`, wait for `Validate`, then run Phase 1. Zappa
+detects the existing deployment and runs an update. Phase 2 is only required
+when the certificate, domain mapping, API identity, or Cloudflare DNS changes.
 
 ### Rollback
 
@@ -534,18 +471,25 @@ the infrastructure change separately and apply the reviewed Terraform plan.
 The **Destroy Lambda App** workflow is intentionally not a full Terraform
 destroy. It performs:
 
-1. Terraform apply with an empty API ID to remove the custom-domain mapping.
+1. Terraform destroy of the independent domain state to remove the mapping and custom domain.
 2. Zappa undeploy to remove the Lambda/API Gateway stack.
 3. Secrets Manager deletion scheduling with a seven-day recovery window.
 
 Run it from GitHub Actions and enter the exact confirmation `DESTROY` with stage
 `production`.
 
-The workflow retains foundational Terraform resources such as the hosted zone,
-certificate, custom domain, IAM roles, artifact bucket, and OIDC provider. A
+The workflow retains foundational Terraform resources such as the certificate,
+IAM roles, artifact bucket, and OIDC provider. Cloudflare DNS records also
+remain and can be removed separately with reviewed DNS access. A
 full teardown requires a separately reviewed local `terraform destroy`. Back up
 state and any required secret/workbook data before destructive operations. The
 external Terraform backend bucket is never destroyed by this stack.
+
+Redeploying within the seven-day recovery window fails because Terraform
+tries to recreate the same-named Secrets Manager secret. Either wait for the
+window to expire or run
+`aws secretsmanager restore-secret --secret-id finance-dash/google-service-account`
+before rerunning Phase 1.
 
 ## Troubleshooting
 

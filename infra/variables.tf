@@ -33,18 +33,6 @@ variable "environment" {
   default     = "prod"
 }
 
-variable "zappa_api_gateway_id" {
-  description = "REST API ID printed by `zappa deploy` (leave empty on first apply)"
-  type        = string
-  default     = ""
-}
-
-variable "zappa_stage_name" {
-  description = "Zappa stage name (must match key in zappa_settings.json)"
-  type        = string
-  default     = "production"
-}
-
 variable "enable_github_oidc_role" {
   description = "Create IAM OIDC provider + role for GitHub Actions deployments"
   type        = bool

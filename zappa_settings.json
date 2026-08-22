@@ -6,7 +6,7 @@
     "s3_bucket": "finance-dash-zappa-prod",
     "role_arn": "arn:aws:iam::875636131680:role/finance-dash-lambda-prod",
     "runtime": "python3.11",
-    "timeout_seconds": 120,
+    "timeout_seconds": 30,
     "memory_size": 1536,
     "django_settings": "finance_dashboard.settings_lambda",
     "environment_variables": {
@@ -39,7 +39,7 @@
       "manage.py"
     ],
     "slim_handler": true,
-    "use_precompiled_packages": true,
+    "use_precompiled_packages": false,
     "lambda_layers": [],
     "keep_warm": false,
     "ephemeral_storage": {

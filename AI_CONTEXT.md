@@ -17,7 +17,7 @@ more detailed [AI_FULL_REPO_PROMPT.md](AI_FULL_REPO_PROMPT.md) instead.
 
 ```text
 Repository: praveenkumarv-github/portfolio
-Branch: fea-googlesheet-aws
+Branch: fea-v2
 
 ROLE
 Act as a senior engineer for this repository. Use attached source and tests as
@@ -68,26 +68,27 @@ Cold starts can lose state; concurrent Lambdas do not share SQLite. Never call
 this durable storage. Recommend S3/DynamoDB/RDS only for a durability request.
 
 RESOURCE OWNERSHIP
-- Terraform: ACM, Route 53 bootstrap records, API Gateway custom domain/mapping,
+- Terraform: ACM, API Gateway custom domain/mapping,
   Lambda execution IAM, GitHub OIDC IAM, encrypted Zappa artifact bucket,
   Secrets Manager secret.
 - Zappa/CloudFormation: Lambda, REST API/stage/deployment, integration, invoke
   permission.
 - External/manual: Terraform backend S3 bucket, registrar, Cloudflare zone and
-  Access app, Google identity/service account.
+  Access app, Google identity/service account. Phase 2 manages Cloudflare DNS
+  through a zone-scoped API token.
 Never assign one resource to both Terraform and Zappa.
 
 DEPLOYMENT
 0. External encrypted/versioned Terraform state bucket exists.
-1. Bootstrap Route 53 locally when needed.
-2. Terraform Phase 1 uses an empty zappa_api_gateway_id.
+1. Bootstrap the backend and GitHub OIDC role locally once.
+2. Phase 1 applies baseline Terraform and deploys or updates Zappa.
 3. Configure Google secret and GitHub secrets/variables.
 4. Ubuntu Validate workflow runs Django checks, pytest, Terraform checks, and
    CPython 3.11 manylinux2014 x86_64 wheel checks.
-5. Deploy workflow assumes branch-scoped GitHub OIDC, reconciles Phase 1,
-   patches Zappa settings, deploys/updates Zappa, validates the REST API ID, and
-   runs Terraform Phase 2 to create the domain mapping.
-6. Configure/verify Cloudflare and test custom hostname plus raw API denial.
+5. Phase 2 publishes ACM validation DNS in Cloudflare, discovers the Zappa API
+  ID, applies the independent domain Terraform state, and publishes the
+  proxied dashboard CNAME.
+6. Verify Cloudflare Access, the custom hostname, and raw API denial.
 Terraform requires >=1.10 and uses a native S3 lockfile. Windows tests do not
 prove Ubuntu or Amazon Linux compatibility.
 
@@ -138,7 +139,7 @@ mindmap
       API Gateway
       Zappa Lambda
         portfolio-production
-        512 MB
+        1536 MB
         30 seconds
         3 GB /tmp
       Secrets Manager
@@ -146,7 +147,6 @@ mindmap
     Ownership
       Terraform
         ACM and custom domain
-        Route 53 bootstrap
         IAM and OIDC
         S3 artifact bucket
         Google secret

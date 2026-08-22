@@ -28,6 +28,10 @@ EXCLUDES = [
     "cache/**",
     "data/**",
     "media/**",
+    "venv/**",
+    ".venv/**",
+    "manage.py",
+    "docker-compose*.yml",
 ]
 
 
@@ -50,6 +54,9 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
         slim_handler=True,
         use_precompiled_packages=False,
         ephemeral_storage={"Size": 3072},
+        # API Gateway REST caps at 29 s; keep Lambda timeout aligned.
+        timeout_seconds=30,
+        memory_size=1536,
         exclude=EXCLUDES,
     )
 

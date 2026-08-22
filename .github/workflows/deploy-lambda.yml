@@ -1,12 +1,8 @@
-name: Deploy Lambda App
+name: Phase 1 - Deploy Infrastructure and Lambda
 
 on:
   workflow_dispatch:
     inputs:
-      terraform_apply:
-        description: "Run Terraform apply phases"
-        required: true
-        default: "true"
       zappa_stage:
         description: "Zappa stage"
         required: true
@@ -25,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
       AWS_REGION: ap-south-1
       TF_IN_AUTOMATION: true
       ZAPPA_STAGE: ${{ github.event.inputs.zappa_stage }}
@@ -65,8 +60,7 @@ jobs:
             --upgrade \
             -r requirements-lambda-native.txt
 
-      - name: Terraform Phase 1 (base infra)
-        if: ${{ github.event.inputs.terraform_apply == 'true' }}
+      - name: Terraform Phase 1 (base infrastructure)
         working-directory: infra
         run: |
           terraform init
@@ -76,15 +70,13 @@ jobs:
             -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
             -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
             -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="zappa_api_gateway_id=" \
             -var="enable_github_oidc_role=true" \
             -var="github_owner=praveenkumarv-github" \
             -var="github_repo=portfolio" \
-            -var="github_branch=fea-v2"
+            -var="github_branch=${{ vars.DEPLOY_BRANCH || 'fea-v2' }}"
 
       - name: Capture Terraform outputs
         id: tf
-        if: ${{ github.event.inputs.terraform_apply == 'true' }}
         working-directory: infra
         run: |
           echo "role_arn=$(terraform output -raw lambda_role_arn)" >> "$GITHUB_OUTPUT"
@@ -136,7 +128,6 @@ jobs:
           fi
 
       - name: Get API Gateway ID from Zappa status
-        id: apigw
         run: |
           source venv/bin/activate
           
@@ -153,24 +144,7 @@ jobs:
             exit 1
           fi
           echo "Extracted API Gateway ID: $API_ID"
-          echo "api_id=$API_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Terraform Phase 2 (custom domain mapping)
-        if: ${{ github.event.inputs.terraform_apply == 'true' }}
-        working-directory: infra
-        run: |
-          terraform apply -auto-approve \
-            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
-            -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
-            -var="project=${{ vars.PROJECT_NAME || 'finance-dash' }}" \
-            -var="environment=${{ vars.ENVIRONMENT || 'prod' }}" \
-            -var="aws_region=${{ env.AWS_REGION }}" \
-            -var="zappa_api_gateway_id=${{ steps.apigw.outputs.api_id }}" \
-            -var="zappa_stage_name=${{ env.ZAPPA_STAGE }}" \
-            -var="enable_github_oidc_role=true" \
-            -var="github_owner=praveenkumarv-github" \
-            -var="github_repo=portfolio" \
-            -var="github_branch=fea-v2"
+          echo "Run the Phase 2 workflow to publish Cloudflare DNS and the custom domain."
 
       - name: Fetch CloudWatch Logs on failure
         if: failure()

@@ -1,0 +1,9 @@
+services:
+  floci:
+    image: floci/floci:latest
+    container_name: portfolio-floci
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_DEFAULT_REGION: ap-south-1
+      FLOCI_STORAGE_MODE: memory

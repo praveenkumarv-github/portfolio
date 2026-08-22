@@ -20,24 +20,29 @@ Cloudflare Access authorizes one Google identity before forwarding a request. Dj
 - AWS account and an authenticated local AWS identity for initial Terraform bootstrap.
 - Terraform 1.10 or later (required for native S3 state locking).
 - Python 3.11.
-- Domain registered and available for Cloudflare nameserver delegation.
+- Domain registered with its Cloudflare nameservers configured at the registrar.
 - GitHub repository Actions enabled.
+- Cloudflare API token scoped to `Zone:DNS:Edit` for the dashboard zone.
 - Google Cloud service account only if private Sheets are required.
 
 The Terraform backend bucket is not created by this project. Create `finance-dash-tfstate-875636131680` before `terraform init`. Enable bucket versioning, default encryption, block public access, and restrict access to the deployment role. Terraform 1.10 or later uses native S3 lockfiles through `use_lockfile = true`; no DynamoDB lock table is required.
 
-## 1. Bootstrap Terraform and OIDC
+## 1. Phase 0: Bootstrap Terraform and OIDC
 
-An initial trusted AWS identity is required because GitHub cannot assume a role before that role exists.
+An initial trusted AWS identity is required because a GitHub workflow cannot create the IAM role it must already assume. Create the backend bucket, then bootstrap the OIDC provider and deployment role once from an authenticated local environment:
 
 ```bash
 cd infra
 terraform init
 terraform apply \
+  -target=aws_iam_openid_connect_provider.github \
+  -target=aws_iam_role.github_actions_deploy \
+  -target=aws_iam_policy.github_actions_deploy \
+  -target=aws_iam_role_policy_attachment.github_actions_deploy \
   -var="domain_name=karynxt.xyz" \
   -var="github_owner=praveenkumarv-github" \
   -var="github_repo=portfolio" \
-  -var="github_branch=fea-googlesheet-aws"
+  -var="github_branch=fea-v2"
 ```
 
 Save `github_actions_role_arn` as the GitHub Actions secret `AWS_GITHUB_ACTIONS_ROLE_ARN`. OIDC trust is restricted to the configured repository and branch. No long-lived AWS key is needed in GitHub.
@@ -63,6 +68,7 @@ Repository secrets:
 - `DJANGO_SECRET_KEY`: generate at least 32 random bytes.
 - `CLOUDFLARE_ACCESS_AUDIENCE`: Access application AUD tag.
 - `CLOUDFLARE_ACCESS_ALLOWED_EMAIL`: the single permitted Google email.
+- `CLOUDFLARE_API_TOKEN`: token scoped to DNS edit for this zone.
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: optional; only needed if CI should upsert the AWS secret instead of using AWS CLI.
 
 Repository variables:
@@ -75,6 +81,8 @@ Repository variables:
 - `GOOGLE_SERVICE_ACCOUNT_SECRET_ID=finance-dash/google-service-account`
 - `CLOUDFLARE_ACCESS_ENABLED=true`
 - `CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://<team-name>.cloudflareaccess.com`
+- `CLOUDFLARE_ZONE_ID=<Cloudflare zone ID>`
+- `DEPLOY_BRANCH=fea-v2`
 
 Store sensitive identity values as secrets even though the AUD and email are not credentials by themselves.
 
@@ -83,37 +91,31 @@ Store sensitive identity values as secrets even though the AUD and email are not
 Cloudflare Access requires the hostname to be proxied through a Cloudflare-managed zone.
 
 1. Add `karynxt.xyz` to Cloudflare and replace the registrar nameservers with Cloudflare's assigned nameservers.
-2. Before switching nameservers, copy the ACM validation CNAME shown by AWS into Cloudflare DNS with proxying disabled. This is required for ACM renewal.
-3. Obtain the API Gateway custom domain target:
+2. In Zero Trust, add Google as an identity provider. For one user, One-time PIN is also feasible, but Google sign-in provides the preferred account security and MFA controls.
+3. Create a self-hosted Access application for `finance.karynxt.xyz`.
+4. Create one Allow policy containing only the exact approved email. Do not allow an entire email domain.
+5. Copy the Application Audience (AUD) tag to the GitHub secret above.
+6. Use a short session duration appropriate for personal use and enable HttpOnly and the binding cookie where browser compatibility permits.
 
-```bash
-aws apigateway get-domain-name \
-  --region ap-south-1 \
-  --domain-name finance.karynxt.xyz \
-  --query regionalDomainName \
-  --output text
-```
+The Phase 2 workflow creates or updates the unproxied ACM validation CNAME and the proxied `finance` CNAME. Keep the validation record permanently for certificate renewal.
 
-4. In Cloudflare DNS, create a proxied CNAME named `finance` pointing to that regional domain name.
-5. In Zero Trust, add Google as an identity provider. For one user, One-time PIN is also feasible, but Google sign-in provides the preferred account security and MFA controls.
-6. Create a self-hosted Access application for `finance.karynxt.xyz`.
-7. Create one Allow policy containing only the exact approved email. Do not allow an entire email domain.
-8. Copy the Application Audience (AUD) tag to the GitHub secret above.
-9. Use a short session duration appropriate for personal use and enable HttpOnly and the binding cookie where browser compatibility permits.
+## 5. Deploy with two workflows
 
-The existing Route 53 hosted zone becomes non-authoritative after nameserver migration. Keep its Terraform resources until the Cloudflare records and ACM renewal validation are confirmed; removing it is a separate migration, not part of application deployment.
+Run `Phase 1 - Deploy Infrastructure and Lambda` from `fea-v2`. It:
 
-## 5. Deploy
+1. Reconciles the baseline Terraform state in `infra/`.
+2. Packages native manylinux dependencies.
+3. Deploys or updates `portfolio-production` with Zappa.
+4. Validates that Zappa produced a REST API ID.
 
-Run the `Deploy Lambda App` workflow manually from `fea-googlesheet-aws`.
+After Phase 1 succeeds, run `Phase 2 - Deploy Cloudflare and Domain`. It:
 
-The workflow performs:
+1. Publishes ACM validation CNAMEs to Cloudflare without proxying.
+2. Discovers the Zappa REST API from the `portfolio-production` CloudFormation stack.
+3. Applies the independent `infra/domain/` Terraform state to validate ACM and create the API Gateway custom domain and mapping.
+4. Creates or updates the proxied `finance` CNAME in Cloudflare.
 
-1. Terraform base reconciliation.
-2. Native manylinux dependency packaging.
-3. Zappa deploy/update.
-4. API Gateway ID discovery.
-5. Terraform custom-domain mapping.
+Both workflows are idempotent and share one concurrency group, so they cannot mutate production simultaneously. Run Phase 2 again after certificate or domain configuration changes; normal application-only updates require Phase 1 only.
 
 Production startup fails closed when `DJANGO_SECRET_KEY` is missing. When Cloudflare Access is enabled, startup also requires team domain, AUD, and allowed email.
 

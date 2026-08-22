@@ -1,5 +1,5 @@
 locals {
-  github_sub = "repo:praveenkumarv-github@42761154/portfolio@1331139919:ref:refs/heads/fea-v2"
+  github_sub = "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${var.github_branch}"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -84,7 +84,6 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:TagOpenIDConnectProvider",
       "lambda:*",
       "logs:*",
-      "route53:*",
       "s3:*",
       "secretsmanager:*",
       "sts:GetCallerIdentity",

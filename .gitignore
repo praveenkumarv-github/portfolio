@@ -31,6 +31,10 @@ media/
 staticfiles/
 /static/
 
+# Runtime caches (regenerated from AMFI/GoodReturns on demand)
+cache/
+data/metal_prices.json
+
 # IDE
 .vscode/
 .idea/
