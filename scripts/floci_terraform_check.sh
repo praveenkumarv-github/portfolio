@@ -37,7 +37,16 @@ TF_VARS=(
   -var="enable_github_oidc_role=false"
 )
 
-terraform -chdir="$INFRA_DIR" init -backend=false -input=false -upgrade
+# Neutralize the real S3 backend so init/apply use ephemeral local state.
+OVERRIDE_FILE="$INFRA_DIR/floci_backend_override.tf"
+cat > "$OVERRIDE_FILE" <<'HCL'
+terraform {
+  backend "local" {}
+}
+HCL
+trap 'rm -f "$OVERRIDE_FILE"' EXIT
+
+terraform -chdir="$INFRA_DIR" init -input=false -upgrade
 terraform -chdir="$INFRA_DIR" validate
 terraform -chdir="$INFRA_DIR" apply -auto-approve -input=false "${TF_VARS[@]}"
 
