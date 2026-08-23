@@ -190,6 +190,29 @@ def _extract_1gram_price(soup, metal: str) -> Optional[float]:
         if _validate(metal, val):
             return val
 
+    # Strategy D — ticker markers used when the "1 gram" row label is absent
+    # (current GoodReturns silver page only quotes /kg).
+    metal_word = re.escape(metal)
+    per_gram = re.search(
+        rf"{metal_word}\s*[\u20b9Rs.\s]*([\d,]+(?:\.\d+)?)\s*/\s*(?:gm|g)\b",
+        full,
+        re.I,
+    )
+    if per_gram:
+        val = float(per_gram.group(1).replace(",", ""))
+        if _validate(metal, val):
+            return val
+
+    per_kg = re.search(
+        rf"{metal_word}\s*[\u20b9Rs.\s]*([\d,]+(?:\.\d+)?)\s*/\s*kg",
+        full,
+        re.I,
+    )
+    if per_kg:
+        val = float(per_kg.group(1).replace(",", "")) / 1000.0
+        if _validate(metal, val):
+            return val
+
     return None
 
 
