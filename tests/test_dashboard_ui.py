@@ -47,6 +47,8 @@ class TestDashboardUI:
             assert "id=\"cmpChart\"" in body
             assert "id=\"trendChart\"" in body
             assert "id=\"mfBladeChart\"" in body
+            assert "id=\"blade-retirement\"" in body
+            assert "id=\"body-blade-retirement\"" in body
             assert "id=\"liqBladeChart\"" in body
             assert "id=\"efBladeChart\"" in body
             assert "id=\"metBladeChart\"" in body
