@@ -23,7 +23,24 @@
   --shadow-lg:0 10px 30px rgba(26,31,54,0.12),0 4px 8px rgba(26,31,54,0.08);
   --shadow-xl:0 20px 50px rgba(26,31,54,0.15),0 8px 16px rgba(26,31,54,0.1);
 }
+html{scroll-behavior:smooth}
 body{font-family:'Inter','Segoe UI',-apple-system,sans-serif;background:var(--bg);background:var(--bg-gradient);color:var(--txt);font-size:13px;line-height:1.5;font-feature-settings:'ss01','cv11';-webkit-font-smoothing:antialiased;min-height:100vh}
+/* Global seamless scrollbar styling */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
 .page{max-width:1460px;margin:0 auto;padding:24px 24px 40px;animation:fadeIn .4s ease-out}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -320,6 +337,88 @@ input[type=url]{width:360px;max-width:100%}
   .portfolio-md{font-size:9px;padding:10px 12px;border-radius:10px;max-height:350px}
   .msg{padding:10px 12px;font-size:11px;border-radius:10px}
 }
+
+
+/* Portfolio Distribution — refined weighted track composition */
+.portfolio-blocks{display:flex;flex-direction:column;gap:10px;padding:6px 0 2px}
+.pb-row{position:relative;border-radius:12px;padding:12px 14px;background:linear-gradient(180deg,rgba(250,251,252,.95) 0%,rgba(244,246,248,.92) 100%);border:1px solid rgba(209,213,218,.75);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),var(--shadow-sm);overflow:hidden;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.pb-row:hover{transform:translateY(-1px);box-shadow:var(--shadow);border-color:rgba(9,105,218,.16)}
+.pb-row::after{content:'';position:absolute;left:14px;right:14px;bottom:8px;height:1px;background:linear-gradient(90deg,rgba(209,213,218,0),rgba(209,213,218,.75),rgba(209,213,218,0));opacity:.45}
+.pb-row-large{padding-top:14px;padding-bottom:14px}
+.pb-row-medium{padding-top:12px;padding-bottom:12px}
+.pb-row-small{padding-top:10px;padding-bottom:10px}
+.pb-content{position:relative;z-index:2;display:grid;grid-template-columns:160px minmax(0,1fr) auto;align-items:center;gap:12px}
+.pb-label{font-size:12px;font-weight:700;color:var(--txt);letter-spacing:-.2px}
+.pb-track{position:relative;height:26px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#f5f7fa 100%);border:1px solid rgba(209,213,218,.9);overflow:hidden;box-shadow:inset 0 1px 2px rgba(26,31,54,.05)}
+.pb-track-fill,.pb-track-stack{position:absolute;left:0;top:0;bottom:0;border-radius:999px;overflow:hidden}
+.pb-track-fill{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(26,31,54,.06)}
+.pb-track-stack{display:flex;gap:1px;background:rgba(255,255,255,.22)}
+.pb-segment{height:100%;position:relative;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(26,31,54,.08)}
+.pb-segment + .pb-segment{border-left:1px solid rgba(255,255,255,.38)}
+.pb-segment[data-tip]{cursor:default}
+.pb-segment[data-tip]::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%) translateY(4px);padding:5px 8px;border-radius:8px;background:rgba(26,31,54,.94);color:#f8fafc;font-size:9px;font-weight:600;letter-spacing:.2px;white-space:nowrap;box-shadow:0 8px 18px rgba(26,31,54,.18);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease;z-index:20}
+.pb-segment[data-tip]::before{content:'';position:absolute;left:50%;bottom:calc(100% + 3px);transform:translateX(-50%) translateY(4px);border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid rgba(26,31,54,.94);opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease;z-index:20}
+.pb-segment[data-tip]:hover::after,.pb-segment[data-tip]:hover::before{opacity:1;transform:translateX(-50%) translateY(0)}
+.pb-segment.tip-left::after{left:0;transform:translateX(0) translateY(4px)}
+.pb-segment.tip-left::before{left:12px;transform:translateX(0) translateY(4px)}
+.pb-segment.tip-left:hover::after,.pb-segment.tip-left:hover::before{transform:translateX(0) translateY(0)}
+.pb-segment.tip-right::after{left:auto;right:0;transform:translateX(0) translateY(4px)}
+.pb-segment.tip-right::before{left:auto;right:12px;transform:translateX(0) translateY(4px)}
+.pb-segment.tip-right:hover::after,.pb-segment.tip-right:hover::before{transform:translateX(0) translateY(0)}
+.pb-segment-label{display:inline-flex;align-items:center;gap:5px;padding:0 8px;font-size:9px;font-weight:700;letter-spacing:.25px;color:rgba(255,255,255,.96);text-shadow:0 1px 1px rgba(26,31,54,.28);white-space:nowrap;opacity:.96}
+.pb-segment-label::before{content:'';width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+.pb-meta{display:flex;align-items:baseline;gap:10px;justify-content:flex-end;min-width:172px}
+.pb-value{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.1px}
+.pb-pct{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--txt);font-variant-numeric:tabular-nums;min-width:58px;text-align:right;letter-spacing:-.5px}
+.pb-row-large .pb-pct{font-size:18px}
+.pb-row-small .pb-track{height:22px}
+.pb-row-small .pb-pct{font-size:15px}
+.pb-row-small .pb-segment-label,.pb-row-medium .pb-segment-label{font-size:8px;padding:0 6px}
+.pb-row-mf .pb-track{background:linear-gradient(180deg,rgba(86,108,94,.08) 0%,rgba(86,108,94,.02) 100%)}
+.pb-row-mf .pb-track-fill{background:linear-gradient(90deg,#5e7567 0%,#7a8c80 100%)}
+.pb-row-ret .pb-track{background:linear-gradient(180deg,rgba(195,175,123,.12) 0%,rgba(195,175,123,.04) 100%)}
+.pb-row-ret .pb-track-fill{background:linear-gradient(90deg,#b7a77a 0%,#c8bc93 100%)}
+.pb-row-liq .pb-track{background:linear-gradient(180deg,rgba(123,135,144,.12) 0%,rgba(123,135,144,.04) 100%)}
+.pb-row-liq .pb-track-fill{background:linear-gradient(90deg,#6e808f 0%,#8ea0ad 100%)}
+.pb-row-ef .pb-track{background:linear-gradient(180deg,rgba(166,120,104,.12) 0%,rgba(166,120,104,.04) 100%)}
+.pb-row-ef .pb-track-fill{background:linear-gradient(90deg,#a67868 0%,#bb8c79 100%)}
+.pb-row-met .pb-track{background:linear-gradient(180deg,rgba(197,191,174,.16) 0%,rgba(197,191,174,.06) 100%)}
+.pb-row-met .pb-track-fill{background:linear-gradient(90deg,#b7b09f 0%,#d1cab9 100%)}
+.seg-mf-1{background:#566c5e}.seg-mf-2{background:#6a7f72}.seg-mf-3{background:#7f9387}.seg-mf-4{background:#96a79d}.seg-mf-5{background:#adb9b1}.seg-mf-6{background:#7b8790}.seg-mf-7{background:#92a0a8}.seg-mf-8{background:#aab5bc}
+.seg-ret-1{background:#a89562}.seg-ret-2{background:#b5a470}.seg-ret-3{background:#c2b37f}.seg-ret-4{background:#d0c091}.seg-ret-5{background:#ddd0a9}
+.seg-liq-1{background:#627987}.seg-liq-2{background:#768d9a}.seg-liq-3{background:#8ba1ad}.seg-liq-4{background:#9eb1bb}.seg-liq-5{background:#b3c0c8}.seg-liq-6{background:#c4cfd5}
+.seg-ef-1{background:#9b6a5a}.seg-ef-2{background:#af7e6c}.seg-ef-3{background:#c19483}.seg-ef-4{background:#d3aa9a}.seg-ef-5{background:#e1c0b2}
+.seg-met-1{background:#aa9e80}.seg-met-2{background:#bdb39a}.seg-met-3{background:#d1c8b4}
+
+
+.trend-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.trend-stats.compact {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--bg-alt);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border-left: 3px solid var(--accent);
+}
+.trend-stat-box.mini {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.trend-stat-box.mini .trend-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+.trend-stat-box.mini .trend-stat-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
 </style>
 </head>
 <body>
@@ -376,15 +475,60 @@ input[type=url]{width:360px;max-width:100%}
           {% if portfolio.category_comparison_meta.underweight %}<span class="stat-pill warn"><span class="icon">▼</span><span class="val">{{ portfolio.category_comparison_meta.underweight.pct|floatformat:1 }}%</span> Low</span>{% endif %}
         </div>
       </div>
-      <div class="compact-table">
+      <div class="portfolio-blocks">
         {% for cat in portfolio.categories %}
-        <div class="compact-row">
-          <div class="cat-name">
-            <span class="cat-icon"></span>
-            {{ cat.label }}
+        <div class="pb-row {% if cat.key == 'mutual_funds' %}pb-row-mf{% elif cat.key == 'retirement' %}pb-row-ret{% elif cat.key == 'liquid' %}pb-row-liq{% elif cat.key == 'emergency_fund' %}pb-row-ef{% elif cat.key == 'metals' %}pb-row-met{% endif %} {% if cat.pct > 30 %}pb-row-large{% elif cat.pct > 15 %}pb-row-medium{% else %}pb-row-small{% endif %}">
+          <div class="pb-content">
+            <span class="pb-label">{{ cat.label }}</span>
+            <div class="pb-track">
+              {% if cat.key == 'mutual_funds' %}
+              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                {% for f in portfolio.mutual_funds %}
+                <div class="pb-segment seg-mf-{% cycle '1' '2' '3' '4' '5' '6' '7' '8' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ f.pct }}%" data-tip="{{ f.fund_name }} · {{ f.pct|floatformat:1 }}%">
+                </div>
+                {% endfor %}
+              </div>
+              {% elif cat.key == 'retirement' %}
+              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                {% for item in portfolio.retirement_split %}
+                <div class="pb-segment seg-ret-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                  {% if item.pct >= 20 %}<span class="pb-segment-label">{{ item.type|truncatechars:12 }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% elif cat.key == 'liquid' %}
+              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                {% for item in portfolio.liquid_split %}
+                <div class="pb-segment seg-liq-{% cycle '1' '2' '3' '4' '5' '6' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                  {% if item.pct >= 18 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% elif cat.key == 'emergency_fund' %}
+              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                {% for item in portfolio.emergency_fund_split %}
+                <div class="pb-segment seg-ef-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                  {% if item.pct >= 24 %}<span class="pb-segment-label">{{ item.type|truncatechars:11 }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% elif cat.key == 'metals' %}
+              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                {% for item in portfolio.metals_split %}
+                <div class="pb-segment seg-met-{% cycle '1' '2' '3' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                  {% if item.pct >= 28 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="pb-track-fill" style="width:{{ cat.pct }}%"></div>
+              {% endif %}
+            </div>
+            <div class="pb-meta">
+              <span class="pb-value">₹{{ cat.value|floatformat:0 }}</span>
+              <span class="pb-pct">{{ cat.pct|floatformat:1 }}%</span>
+            </div>
           </div>
-          <div class="cat-val">₹{{ cat.value|floatformat:0 }}</div>
-          <div class="cat-pct">{{ cat.pct|floatformat:1 }}%</div>
         </div>
         {% endfor %}
       </div>
@@ -399,14 +543,14 @@ input[type=url]{width:360px;max-width:100%}
         <span class="card-meta" id="nw-period">—</span>
       </div>
       <div class="trend-container">
-        <div class="trend-stats" id="trend-stats-grid" style="display:none">
-          <div class="trend-stat-box">
-            <div class="trend-stat-label">Total Change</div>
+        <div class="trend-stats compact" id="trend-stats-grid" style="display:none">
+          <div class="trend-stat-box mini">
+            <div class="trend-stat-label">Total</div>
             <div class="trend-stat-value" id="nw-change">—</div>
             <div class="trend-stat-delta" id="nw-pct">—</div>
           </div>
-          <div class="trend-stat-box">
-            <div class="trend-stat-label">Recent Move</div>
+          <div class="trend-stat-box mini">
+            <div class="trend-stat-label">Recent</div>
             <div class="trend-stat-value" id="nw-recent">—</div>
             <div class="trend-stat-delta" id="nw-recent-pct">—</div>
           </div>
@@ -422,7 +566,7 @@ input[type=url]{width:360px;max-width:100%}
   </section>
 
   <section class="blades">
-    <div class="blade" id="blade-mutual_funds"><div class="blade-head" onclick="toggleBlade('blade-mutual_funds')"><span>MF</span><span class="blade-name">Mutual Funds</span><span class="blade-val">₹{{ portfolio.mf_total|floatformat:0 }}</span><span class="chev" id="chev-blade-mutual_funds">▼</span></div><div class="blade-body" id="body-blade-mutual_funds"><div class="blade-layout mf-layout"><div class="side"><div class="stack"><div class="mini-panel"><div class="mini-title">Fund-wise Allocation</div><div class="blade-chart"><canvas id="mfBladeChart" width="250" height="180"></canvas></div></div><div class="mini-panel"><div class="mini-title">Equity / Debt / Hybrid</div><div class="blade-chart"><canvas id="mfSplitChart" width="250" height="150"></canvas></div></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Fund</th><th class="r">Units</th><th class="r">NAV</th><th class="r">Value</th></tr></thead><tbody>{% for f in portfolio.mutual_funds %}<tr><td>{{ f.fund_name }}<div class="sub">{{ f.identifier }} | {{ f.nav_source }}</div></td><td class="r">{{ f.units|floatformat:2 }}</td><td class="r">₹{{ f.nav|floatformat:2 }}</td><td class="r">₹{{ f.current_value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.mf_total|floatformat:0 }}</td></tr></tfoot></table>
+    <div class="blade" id="blade-mutual_funds"><div class="blade-head" onclick="toggleBlade('blade-mutual_funds')"><span>MF</span><span class="blade-name">Mutual Funds</span><span class="blade-val">₹{{ portfolio.mf_total|floatformat:0 }}</span><span class="chev" id="chev-blade-mutual_funds">▼</span></div><div class="blade-body" id="body-blade-mutual_funds"><div class="blade-layout mf-layout"><div class="side"><div class="stack"><div class="mini-panel"><div class="mini-title">Fund-wise Allocation</div><div class="blade-chart"><canvas id="mfBladeChart" width="250" height="250"></canvas></div></div><div class="mini-panel"><div class="mini-title">Equity / Debt / Hybrid</div><div class="blade-chart"><canvas id="mfSplitChart" width="250" height="250"></canvas></div></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Fund</th><th class="r">Units</th><th class="r">NAV</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for f in portfolio.mutual_funds %}<tr><td>{{ f.fund_name }}<div class="sub">{{ f.identifier }} | {{ f.nav_source }}</div></td><td class="r">{{ f.units|floatformat:2 }}</td><td class="r">₹{{ f.nav|floatformat:2 }}</td><td class="r">₹{{ f.current_value|floatformat:0 }}</td><td class="r">{{ f.pct|floatformat:1 }}%</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.mf_total|floatformat:0 }}</td><td class="r">100.0%</td></tr></tfoot></table>
       <div style="margin-top:8px;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><table class="tbl"><thead><tr><th>Type</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for s in portfolio.mf_split %}<tr><td>{{ s.type }}</td><td class="r">₹{{ s.value|floatformat:0 }}</td><td class="r">{{ s.pct|floatformat:1 }}</td></tr>{% endfor %}</tbody></table></div>
       </div></div></div></div>
 
@@ -821,8 +965,8 @@ function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){
  {% endfor %}
  retirementData.colours=elegantPalette.slice(0,retirementData.labels.length);
 
- mkDoughnut('mfBladeChart',mfChart.labels,mfChart.values,mfChart.colours,true,160,[pieValueLabels]);
- mkDoughnut('mfSplitChart',mfSplitChart.labels,mfSplitChart.values,mfSplitChart.colours,true,140,[pieValueLabels]);
+ mkDoughnut('mfBladeChart',mfChart.labels,mfChart.values,mfChart.colours,true,250,[pieValueLabels]);
+ mkDoughnut('mfSplitChart',mfSplitChart.labels,mfSplitChart.values,mfSplitChart.colours,true,250,[pieValueLabels]);
  mkDoughnut('retBladeChart',retirementData.labels,retirementData.values,retirementData.colours,true,160,[pieValueLabels]);
  mkDoughnut('liqBladeChart',liquidChart.labels,liquidChart.values,liquidChart.colours,true,160,[pieValueLabels]);
  mkDoughnut('efBladeChart',efChart.labels,efChart.values,efChart.colours,true,160,[pieValueLabels]);
