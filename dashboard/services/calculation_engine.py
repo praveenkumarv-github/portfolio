@@ -66,8 +66,12 @@ class PortfolioSummary:
     mf_chart: dict
     mf_split: List[dict]
     mf_split_chart: dict
+    retirement_split: List[dict]
     liquid_chart: dict
+    liquid_split: List[dict]
+    emergency_fund_split: List[dict]
     ef_chart: dict
+    metals_split: List[dict]
     metals_chart: dict
     risk_chart: dict
 
@@ -267,6 +271,11 @@ def build_portfolio(data: dict) -> PortfolioSummary:
 
     # ── Per-blade mini charts ─────────────────────────────────────────────
     mf_list = data.get("mutual_funds", [])
+    
+    # Pre-calculate mutual fund percentages against mf_total
+    for f in mf_list:
+        f["pct"] = _pct(float(f.get("current_value", 0)), mf_total)
+
     mf_chart = _mini_chart(
         [f.get("fund_name", "Fund")[:20] for f in mf_list],
         [float(f.get("current_value", 0)) for f in mf_list],
@@ -289,13 +298,46 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     )
 
     liq_list = data.get("liquid", [])
+    for item in liq_list:
+        item["pct"] = _pct(float(item.get("amount", 0)), liq_total)
+
+    liquid_type_totals: Dict[str, float] = {}
+    for item in liq_list:
+        label = item.get("type") or "Other"
+        liquid_type_totals[label] = liquid_type_totals.get(label, 0.0) + float(item.get("amount", 0))
+
+    liquid_split = [
+        {"type": label, "value": value, "pct": _pct(value, liq_total)}
+        for label, value in sorted(liquid_type_totals.items(), key=lambda pair: pair[1], reverse=True)
+    ]
+
     liq_chart = _mini_chart(
         [a.get("account_name", "Account") for a in liq_list],
         [float(a.get("amount", 0)) for a in liq_list],
         [f"hsl({(i*67+120)%360},55%,50%)" for i in range(len(liq_list))],
     )
 
+    ret_list = data.get("retirement", [])
+    for item in ret_list:
+        item["pct"] = _pct(float(item.get("amount", 0)), ret_total)
+
+    retirement_split = [
+        {
+            "type": item.get("type") or "Other",
+            "value": float(item.get("amount", 0)),
+            "pct": item["pct"],
+        }
+        for item in sorted(ret_list, key=lambda row: float(row.get("amount", 0)), reverse=True)
+        if float(item.get("amount", 0)) > 0
+    ]
+
     ef_bt = data.get("emergency_fund_by_type", {})
+    emergency_fund_split = [
+        {"type": key or "Other", "value": float(value), "pct": _pct(float(value), ef_total)}
+        for key, value in sorted(ef_bt.items(), key=lambda pair: float(pair[1]), reverse=True)
+        if float(value) > 0
+    ]
+
     ef_chart = _mini_chart(
         list(ef_bt.keys()),
         [float(v) for v in ef_bt.values()],
@@ -303,13 +345,24 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     )
 
     met_list = data.get("metals", [])
+    for item in met_list:
+        item["pct"] = _pct(float(item.get("value", 0)), met_total)
+
+    metals_split = [
+        {
+            "type": item.get("type") or "Metal",
+            "value": float(item.get("value", 0)),
+            "pct": item["pct"],
+        }
+        for item in sorted(met_list, key=lambda row: float(row.get("value", 0)), reverse=True)
+        if float(item.get("value", 0)) > 0
+    ]
+
     metals_chart = _mini_chart(
         [m.get("type", "Metal") for m in met_list],
         [float(m.get("value", 0)) for m in met_list],
         ["#e8b44a", "#90a8be"],
     )
-
-    ret_list = data.get("retirement", [])
 
     # ── Risk / insurance ──────────────────────────────────────────────────
     risk_rows: List[RiskRow] = []
@@ -351,8 +404,12 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         mf_chart=mf_chart,
         mf_split=mf_split,
         mf_split_chart=mf_split_chart,
+        retirement_split=retirement_split,
         liquid_chart=liq_chart,
+        liquid_split=liquid_split,
+        emergency_fund_split=emergency_fund_split,
         ef_chart=ef_chart,
+        metals_split=metals_split,
         metals_chart=metals_chart,
         risk_chart=risk_chart,
         mutual_funds=mf_list,
