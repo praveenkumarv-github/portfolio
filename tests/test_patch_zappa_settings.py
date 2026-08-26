@@ -19,7 +19,6 @@ def _environment(**overrides):
         "ZAPPA_STAGE": "production",
         "DJANGO_SECRET_KEY": "test-secret-with-at-least-fifty-random-looking-characters-123",
         "ALLOWED_HOSTS": "finance.example.com,.amazonaws.com",
-        "GOOGLE_SERVICE_ACCOUNT_SECRET_ID": "finance-dash/google-service-account",
         "CLOUDFLARE_ACCESS_ENABLED": "true",
         "CLOUDFLARE_ACCESS_TEAM_DOMAIN": "https://personal.cloudflareaccess.com",
         "CLOUDFLARE_ACCESS_AUDIENCE": "audience",
@@ -38,7 +37,7 @@ def test_patch_produces_secure_lambda_configuration():
     assert production["runtime"] == "python3.11"
     assert production["ephemeral_storage"] == {"Size": 3072}
     assert "GOOGLE_SERVICE_ACCOUNT_JSON" not in variables
-    assert variables["GOOGLE_SERVICE_ACCOUNT_SECRET_ID"] == "finance-dash/google-service-account"
+    assert "GOOGLE_SERVICE_ACCOUNT_SECRET_ID" not in variables
     assert variables["CLOUDFLARE_ACCESS_ENABLED"] == "true"
 
 

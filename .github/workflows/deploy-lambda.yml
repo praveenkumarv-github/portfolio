@@ -92,22 +92,10 @@ jobs:
           LAMBDA_LAYER_ARNS: ${{ vars.LAMBDA_LAYER_ARNS }}
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           ALLOWED_HOSTS: ${{ vars.ALLOWED_HOSTS }}
-          GOOGLE_SERVICE_ACCOUNT_SECRET_ID: ${{ vars.GOOGLE_SERVICE_ACCOUNT_SECRET_ID || 'finance-dash/google-service-account' }}
           CLOUDFLARE_ACCESS_ENABLED: ${{ vars.CLOUDFLARE_ACCESS_ENABLED }}
           CLOUDFLARE_ACCESS_TEAM_DOMAIN: ${{ vars.CLOUDFLARE_ACCESS_TEAM_DOMAIN }}
           CLOUDFLARE_ACCESS_AUDIENCE: ${{ secrets.CLOUDFLARE_ACCESS_AUDIENCE }}
           CLOUDFLARE_ACCESS_ALLOWED_EMAIL: ${{ secrets.CLOUDFLARE_ACCESS_ALLOWED_EMAIL }}
-
-      - name: Upsert Google service account secret in Secrets Manager
-        if: env.GOOGLE_SA_JSON != ''
-        env:
-          GOOGLE_SA_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: |
-          source venv/bin/activate
-          aws secretsmanager put-secret-value \
-            --region "$AWS_REGION" \
-            --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
-            --secret-string "$GOOGLE_SA_JSON"
 
       - name: Clean Zappa cache before packaging
         run: |

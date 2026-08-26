@@ -53,7 +53,6 @@ def test_extract_google_sheet_id_invalid_url_raises():
 
 def test_public_sheet_without_service_account(monkeypatch):
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", raising=False)
     from dashboard.services import google_sheet_service
     google_sheet_service._load_service_account_json.cache_clear()
     monkeypatch.setattr(
@@ -79,7 +78,6 @@ def test_fetch_google_sheet_invalid_url_raises():
 
 def test_fetch_google_sheet_non_xlsx_payload_raises(monkeypatch):
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", raising=False)
     from dashboard.services import google_sheet_service
     google_sheet_service._load_service_account_json.cache_clear()
     monkeypatch.setattr(
@@ -136,7 +134,6 @@ def test_private_service_account_export(monkeypatch):
 
 def test_non_public_sheet_without_credentials(monkeypatch):
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", raising=False)
     from dashboard.services import google_sheet_service
     google_sheet_service._load_service_account_json.cache_clear()
     monkeypatch.setattr(
@@ -168,7 +165,6 @@ def test_malformed_private_credentials_can_fall_back_to_public(monkeypatch):
 def test_open_google_sheet_removes_temporary_file(monkeypatch):
     temp_path = None
     monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", raising=False)
     from dashboard.services import google_sheet_service
     google_sheet_service._load_service_account_json.cache_clear()
     monkeypatch.setattr(
@@ -184,18 +180,3 @@ def test_open_google_sheet_removes_temporary_file(monkeypatch):
     assert not os.path.exists(temp_path)
 
 
-def test_service_account_can_load_from_secrets_manager(monkeypatch):
-    monkeypatch.delenv("GOOGLE_SERVICE_ACCOUNT_JSON", raising=False)
-    monkeypatch.setenv("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", "finance-dash/google-service-account")
-    monkeypatch.setenv("AWS_REGION", "ap-south-1")
-    from dashboard.services import google_sheet_service
-    google_sheet_service._load_service_account_json.cache_clear()
-
-    class FakeSecretsClient:
-        def get_secret_value(self, SecretId):
-            assert SecretId == "finance-dash/google-service-account"
-            return {"SecretString": '{"type": "service_account"}'}
-
-    monkeypatch.setattr("boto3.client", lambda *args, **kwargs: FakeSecretsClient())
-    assert google_sheet_service._load_service_account_json() == '{"type": "service_account"}'
-    google_sheet_service._load_service_account_json.cache_clear()

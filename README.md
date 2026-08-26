@@ -40,7 +40,6 @@ flowchart LR
     XLSX --> CALC[Calculation and aggregation engine]
     CALC --> VIEW[Charts, allocation, alerts]
 
-    L --> SM[AWS Secrets Manager<br/>Google service account]
     APP --> NAV[AMFI / MFAPI]
     APP --> METAL[GoodReturns / cache / manual price]
     APP --> TMP[Lambda /tmp<br/>SQLite, workbook, caches]
@@ -54,7 +53,6 @@ flowchart TB
     TF --> DOMAIN[API Gateway custom domain and mapping]
     TF --> IAM[Lambda and GitHub OIDC IAM roles]
     TF --> S3[Encrypted Zappa artifact bucket]
-    TF --> SECRET[Secrets Manager secret]
 
     Z[Zappa / CloudFormation] --> LAMBDA[Lambda function]
     Z --> REST[API Gateway REST API and stage]
@@ -79,7 +77,7 @@ sequenceDiagram
     Admin->>TF: Bootstrap backend and OIDC once
     Admin->>GH: Configure repository secrets and variables
     Admin->>GH: Run Phase 1
-    GH->>TF: Reconcile baseline ACM, IAM, S3, and secret
+    GH->>TF: Reconcile baseline ACM, IAM, and S3
     GH->>Z: Deploy or update portfolio-production
     Z->>AWS: Create Lambda, REST API, and production stage
     Admin->>GH: Run Phase 2
@@ -96,9 +94,6 @@ sequenceDiagram
 - Private Google Drive export using a service account.
 - Public Google Sheet XLSX export when credentials are absent or private access
   is unavailable.
-- AWS Secrets Manager retrieval through
-  `GOOGLE_SERVICE_ACCOUNT_SECRET_ID`; credentials are not placed in Lambda
-  environment variables.
 - Local private-Sheet support through `GOOGLE_SERVICE_ACCOUNT_JSON`.
 - Safe error messages and logs that omit Sheet IDs and credentials.
 - Unique imported filenames to prevent a repeated Google import from deleting
@@ -317,22 +312,14 @@ only local infrastructure phase. Phase 1 completes the baseline state; Phase 2
 uses a separate `prod/domain.tfstate`, so later Phase 1 runs cannot remove the
 custom domain.
 
-### Step 2 - Configure the Google secret
+### Step 2 - Configure Google access when needed
 
 For private Sheets, enable Google Drive API, create a service account, and share
 the Sheet with its `client_email` as Viewer.
 
-Choose one credential-loading method:
-
-1. Add the complete service-account JSON as the GitHub repository secret
-   `GOOGLE_SERVICE_ACCOUNT_JSON`. The deployment workflow upserts it into
-   Secrets Manager.
-2. Replace the placeholder secret value in the AWS Secrets Manager console at
-   `finance-dash/google-service-account`.
-
-The secret value must be the Google JSON object itself, not a path, escaped
-wrapper string, or `{ "note": ... }` placeholder. Public Sheets can use the
-public-export fallback without usable service-account credentials.
+For local private-sheet testing, set `GOOGLE_SERVICE_ACCOUNT_JSON` in your local
+environment. Public Sheets can use the public-export fallback without service-account
+credentials.
 
 ### Step 3 - Configure GitHub Actions
 
@@ -346,7 +333,6 @@ Actions -> Secrets**:
 | `CLOUDFLARE_ACCESS_AUDIENCE` | Cloudflare Access application AUD tag |
 | `CLOUDFLARE_ACCESS_ALLOWED_EMAIL` | Exact permitted Google email |
 | `CLOUDFLARE_API_TOKEN` | Zone-scoped token with `Zone:DNS:Edit` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Optional complete Google service-account JSON |
 
 Add these repository variables under **Actions -> Variables**:
 
@@ -357,7 +343,6 @@ Add these repository variables under **Actions -> Variables**:
 | `PROJECT_NAME` | `finance-dash` |
 | `ENVIRONMENT` | `prod` |
 | `ALLOWED_HOSTS` | `finance.karynxt.xyz,.amazonaws.com` |
-| `GOOGLE_SERVICE_ACCOUNT_SECRET_ID` | `finance-dash/google-service-account` |
 | `CLOUDFLARE_ACCESS_ENABLED` | `true` |
 | `CLOUDFLARE_ACCESS_TEAM_DOMAIN` | `https://<team>.cloudflareaccess.com` |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID for `karynxt.xyz` |
@@ -473,7 +458,6 @@ destroy. It performs:
 
 1. Terraform destroy of the independent domain state to remove the mapping and custom domain.
 2. Zappa undeploy to remove the Lambda/API Gateway stack.
-3. Secrets Manager deletion scheduling with a seven-day recovery window.
 
 Run it from GitHub Actions and enter the exact confirmation `DESTROY` with stage
 `production`.
@@ -482,14 +466,8 @@ The workflow retains foundational Terraform resources such as the certificate,
 IAM roles, artifact bucket, and OIDC provider. Cloudflare DNS records also
 remain and can be removed separately with reviewed DNS access. A
 full teardown requires a separately reviewed local `terraform destroy`. Back up
-state and any required secret/workbook data before destructive operations. The
+state and any required workbook data before destructive operations. The
 external Terraform backend bucket is never destroyed by this stack.
-
-Redeploying within the seven-day recovery window fails because Terraform
-tries to recreate the same-named Secrets Manager secret. Either wait for the
-window to expire or run
-`aws secretsmanager restore-secret --secret-id finance-dash/google-service-account`
-before rerunning Phase 1.
 
 ## Troubleshooting
 
@@ -531,7 +509,6 @@ before rerunning Phase 1.
 
 - Confirm Google Drive API is enabled.
 - Confirm a private Sheet is shared with the service-account `client_email`.
-- Confirm Secrets Manager contains the JSON object rather than the placeholder.
 - Test a public Sheet export to isolate Drive API authentication.
 - Search logs for `[GSheet]`; identifiers and credentials are intentionally
   omitted.

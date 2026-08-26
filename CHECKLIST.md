@@ -16,7 +16,7 @@
 - [ ] My Profile → **API Tokens** → create token with `Zone:DNS:Edit` scoped to this zone only → save token.
 - [ ] Note the **Zone ID** (Overview page).
 
-## 2. (Optional) Google Sheet service account
+## 2. (Optional) Local Google Sheet service account
 
 - [ ] Google Cloud → enable **Drive API** → create service account → download `key.json` → share the Sheet with its `client_email` as Viewer.
 
@@ -74,7 +74,6 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 - [ ] `CLOUDFLARE_ACCESS_AUDIENCE` — AUD tag from step 1
 - [ ] `CLOUDFLARE_ACCESS_ALLOWED_EMAIL` — your Gmail
 - [ ] `CLOUDFLARE_API_TOKEN` — token from step 1
-- [ ] `GOOGLE_SERVICE_ACCOUNT_JSON` — full `key.json` contents (optional)
 
 **Variables**
 
@@ -83,7 +82,6 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 - [ ] `PROJECT_NAME=finance-dash`
 - [ ] `ENVIRONMENT=prod`
 - [ ] `ALLOWED_HOSTS=finance.<your-domain>,.amazonaws.com`
-- [ ] `GOOGLE_SERVICE_ACCOUNT_SECRET_ID=finance-dash/google-service-account`
 - [ ] `CLOUDFLARE_ACCESS_ENABLED=true`
 - [ ] `CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://<team>.cloudflareaccess.com`
 - [ ] `CLOUDFLARE_ZONE_ID=<zone id>`
@@ -103,11 +101,11 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 
 - [ ] `https://finance.<your-domain>/` → Cloudflare login → Google sign-in → dashboard loads.
 - [ ] `curl -i https://<api-id>.execute-api.ap-south-1.amazonaws.com/production/` → **HTTP 403**.
-- [ ] Upload sample XLSX or paste a Google Sheet URL → portfolio renders.
+- [ ] Upload sample XLSX or paste a public Google Sheet URL → portfolio renders.
 
 ## 9. Everyday ops
 
 - App change: push → **Phase 1**.
 - Cert / DNS / mapping change: **Phase 2**.
 - Rollback: `zappa rollback production -n 1`.
-- Teardown: **Destroy Lambda App** workflow (type `DESTROY`); redeploy within 7 days needs `aws secretsmanager restore-secret --secret-id finance-dash/google-service-account`.
+- Teardown: **Destroy Lambda App** workflow (type `DESTROY`).

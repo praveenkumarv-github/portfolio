@@ -6,9 +6,8 @@ Terraform manages:
 
 - ACM regional certificate in the baseline state.
 - API Gateway custom domain/base-path mapping in the independent domain state.
-- Lambda execution role and policies for logs and the Google secret.
+- Lambda execution role and policy for logs.
 - Private AES-256 encrypted S3 Zappa artifact bucket.
-- Secrets Manager secret for Google service-account JSON.
 - GitHub OIDC provider, branch-scoped deployment role, and deployment policy.
 
 Zappa/CloudFormation manages:
@@ -48,15 +47,12 @@ Lambda `/tmp` is ephemeral. A warm environment may retain data, but a cold envir
 Credential order:
 
 1. Local `GOOGLE_SERVICE_ACCOUNT_JSON`, when explicitly set.
-2. AWS secret identified by `GOOGLE_SERVICE_ACCOUNT_SECRET_ID`.
-3. No credentials, which selects public export.
+2. No credentials, which selects public export.
 
 When credentials exist, private Drive export is attempted first. If credentials are malformed, dependencies are unavailable, or the service account cannot access that file, the application attempts public export. A private Sheet still fails with a safe access message. Every response must be a structurally valid XLSX ZIP containing workbook metadata before it reaches pandas.
 
 Troubleshooting:
 
-- Confirm Lambda has `secretsmanager:GetSecretValue` for the exact secret ARN.
-- Confirm the secret contains the Google JSON itself, not a wrapper or placeholder.
 - Confirm Drive API is enabled and the private Sheet is shared with `client_email`.
 - For public mode, verify the export URL works without a signed-in browser session.
 - Search CloudWatch logs for `[GSheet]`; logs intentionally omit credentials and Sheet IDs.
@@ -80,7 +76,7 @@ Current infrastructure writes Lambda logs but does not provision alarms or expli
 - API Gateway 5xx and latency alarms.
 - CloudWatch log retention of 14-30 days for a personal dashboard.
 - A synthetic check that expects Cloudflare authentication, not HTTP 200.
-- AWS Budget alert and Secrets Manager rotation reminder.
+- AWS Budget alert.
 
 Avoid adding an unauthenticated health endpoint because it weakens the fail-closed origin boundary.
 
@@ -98,7 +94,7 @@ docker compose -f docker-compose.floci.yml down
 
 Scope and limits:
 
-- Validates baseline resources only (IAM role/policies, S3 artifact bucket, Secrets Manager, ACM cert record). `enable_github_oidc_role=false` skips the GitHub OIDC provider whose thumbprints are not meaningful against an emulator.
+- Validates baseline resources only (IAM role/policies, S3 artifact bucket, ACM cert record). `enable_github_oidc_role=false` skips the GitHub OIDC provider whose thumbprints are not meaningful against an emulator.
 - Does not exercise `infra/domain` because `aws_acm_certificate_validation` needs real DNS.
 - Does not exercise Zappa, API Gateway custom domain, or Cloudflare — those require live services.
 - Floci uses in-memory storage, so every run is a fresh account. A green run proves the code applies and destroys cleanly; it does not prove real AWS quota, service-linked-role, or IAM condition behavior.
@@ -123,13 +119,13 @@ Scope and limits:
 ### Google Sheet fails
 
 1. Test a public export without credentials to isolate Google API configuration.
-2. Inspect the AWS secret and service-account sharing.
+2. Inspect service-account sharing.
 3. Confirm Google packages were included in the Zappa artifact.
 4. Verify the downloaded response is XLSX rather than a Google login/error page.
 
 ## Cost profile
 
-At personal traffic levels, Lambda and API Gateway are usually within free or low usage tiers. Recurring charges primarily come from Secrets Manager, S3 storage, and any Cloudflare plan above its free Zero Trust allowance. Review current provider pricing rather than relying on a fixed estimate.
+At personal traffic levels, Lambda and API Gateway are usually within free or low usage tiers. Recurring charges primarily come from S3 storage and any Cloudflare plan above its free Zero Trust allowance. Review current provider pricing rather than relying on a fixed estimate.
 
 ## Known risks
 

@@ -12,7 +12,7 @@ provider "aws" {
   region = var.aws_region
 
   # These tags will be automatically applied to ALL resources
-  # (Lambda, S3, API Gateway, IAM Roles, Secrets Manager, etc.)
+  # (Lambda, S3, API Gateway, IAM roles, etc.)
   default_tags {
     tags = {
       Project     = var.project
@@ -75,26 +75,6 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
   policy_arn = aws_iam_policy.lambda_logs.arn
 }
 
-data "aws_iam_policy_document" "lambda_secrets" {
-  statement {
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.google_sa.arn,
-    ]
-  }
-}
-
-resource "aws_iam_policy" "lambda_secrets" {
-  name   = "${var.project}-lambda-secrets-${var.environment}"
-  policy = data.aws_iam_policy_document.lambda_secrets.json
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_secrets" {
-  role       = aws_iam_role.lambda_exec.name
-  policy_arn = aws_iam_policy.lambda_secrets.arn
-}
-
 resource "aws_s3_bucket" "deploy" {
   bucket = "${var.project}-zappa-${var.environment}"
 }
@@ -115,20 +95,5 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "deploy" {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
-  }
-}
-
-resource "aws_secretsmanager_secret" "google_sa" {
-  name                    = "${var.project}/google-service-account"
-  description             = "Google Service Account JSON"
-  recovery_window_in_days = 7
-}
-
-resource "aws_secretsmanager_secret_version" "google_sa_placeholder" {
-  secret_id     = aws_secretsmanager_secret.google_sa.id
-  secret_string = jsonencode({ note = "replace-via-aws-cli" })
-
-  lifecycle {
-    ignore_changes = [secret_string]
   }
 }

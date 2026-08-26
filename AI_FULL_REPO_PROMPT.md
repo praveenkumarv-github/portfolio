@@ -80,8 +80,8 @@ APPLICATION AND SECURITY RULES
   HSTS, host validation, and XLSX structural/size protections.
 - Preserve private Google Drive export and public XLSX fallback behavior unless
   the issue explicitly changes that contract.
-- Google service-account JSON belongs in local process configuration or AWS
-  Secrets Manager, never directly in Lambda environment variables.
+- Google service-account JSON belongs in local process configuration, never
+  directly in Lambda environment variables.
 
 STATE RULES
 - Lambda /tmp SQLite, workbooks, caches, and snapshots are ephemeral and not
@@ -92,8 +92,7 @@ STATE RULES
 
 INFRASTRUCTURE OWNERSHIP
 - Terraform owns ACM, API Gateway custom
-  domain/mapping, execution/deployment IAM, GitHub OIDC, artifact S3, and the
-  Secrets Manager resource.
+  domain/mapping, execution/deployment IAM, GitHub OIDC, and artifact S3.
 - Zappa/CloudFormation owns Lambda, REST API/stage/deployment, integration, and
   invoke permission.
 - External/manual ownership includes the Terraform backend bucket, registrar,

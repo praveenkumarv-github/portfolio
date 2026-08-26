@@ -54,26 +54,7 @@ class GoogleSheetAccessError(GoogleSheetError):
 @lru_cache(maxsize=1)
 def _load_service_account_json() -> str:
     direct_value = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-    if direct_value:
-        return direct_value
-
-    secret_id = os.environ.get("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", "").strip()
-    if not secret_id:
-        return ""
-
-    try:
-        import boto3
-        from botocore.config import Config
-
-        client = boto3.client(
-            "secretsmanager",
-            region_name=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"),
-            config=Config(connect_timeout=2, read_timeout=2, retries={"max_attempts": 2}),
-        )
-        return client.get_secret_value(SecretId=secret_id).get("SecretString", "").strip()
-    except Exception as exc:
-        logger.warning("[GSheet] service-account secret unavailable: %s", type(exc).__name__)
-        return ""
+    return direct_value
 
 def _save_to_temp(payload: bytes) -> str:
     """Write bytes to a prefixed temp .xlsx; return path."""

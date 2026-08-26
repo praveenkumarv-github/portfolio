@@ -10,7 +10,6 @@ flowchart LR
     APIGW --> Lambda[Zappa Lambda]
     Lambda --> JWT[Cloudflare JWT verification]
     JWT --> Django[Django dashboard]
-    Lambda --> SM[AWS Secrets Manager]
 ```
 
 Cloudflare Access authorizes one Google identity before forwarding a request. Django then verifies the `Cf-Access-Jwt-Assertion` signature, issuer, audience, expiry, and exact email. This second check denies raw `execute-api` requests that do not contain a valid application token.
@@ -47,18 +46,9 @@ terraform apply \
 
 Save `github_actions_role_arn` as the GitHub Actions secret `AWS_GITHUB_ACTIONS_ROLE_ARN`. OIDC trust is restricted to the configured repository and branch. No long-lived AWS key is needed in GitHub.
 
-## 2. Store Google credentials
+## 2. Optional local Google credentials
 
-For private Sheets, enable Google Drive API, create a service account, and share each Sheet with its `client_email` as Viewer.
-
-```bash
-aws secretsmanager put-secret-value \
-  --region ap-south-1 \
-  --secret-id finance-dash/google-service-account \
-  --secret-string file://key.json
-```
-
-Lambda retrieves this value at runtime using its Secrets Manager IAM policy. The JSON is not injected into Lambda environment variables. Public Sheets do not require a service account.
+For private Sheets in local development, enable Google Drive API, create a service account, and share each Sheet with its `client_email` as Viewer. Set `GOOGLE_SERVICE_ACCOUNT_JSON` locally when needed. Public Sheets do not require a service account.
 
 ## 3. Configure GitHub
 
@@ -69,7 +59,6 @@ Repository secrets:
 - `CLOUDFLARE_ACCESS_AUDIENCE`: Access application AUD tag.
 - `CLOUDFLARE_ACCESS_ALLOWED_EMAIL`: the single permitted Google email.
 - `CLOUDFLARE_API_TOKEN`: token scoped to DNS edit for this zone.
-- `GOOGLE_SERVICE_ACCOUNT_JSON`: optional; only needed if CI should upsert the AWS secret instead of using AWS CLI.
 
 Repository variables:
 
@@ -78,7 +67,6 @@ Repository variables:
 - `PROJECT_NAME=finance-dash`
 - `ENVIRONMENT=prod`
 - `ALLOWED_HOSTS=finance.karynxt.xyz,.amazonaws.com`
-- `GOOGLE_SERVICE_ACCOUNT_SECRET_ID=finance-dash/google-service-account`
 - `CLOUDFLARE_ACCESS_ENABLED=true`
 - `CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://<team-name>.cloudflareaccess.com`
 - `CLOUDFLARE_ZONE_ID=<Cloudflare zone ID>`

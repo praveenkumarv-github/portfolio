@@ -83,9 +83,7 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
     variables["DJANGO_SETTINGS_MODULE"] = "finance_dashboard.settings_lambda"
     variables["DJANGO_SECRET_KEY"] = _required(environment, "DJANGO_SECRET_KEY")
     variables["ALLOWED_HOSTS"] = _required(environment, "ALLOWED_HOSTS")
-    variables["GOOGLE_SERVICE_ACCOUNT_SECRET_ID"] = _required(
-        environment, "GOOGLE_SERVICE_ACCOUNT_SECRET_ID"
-    )
+    variables.pop("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", None)
     variables["CLOUDFLARE_ACCESS_ENABLED"] = access_mode
 
     access_names = (

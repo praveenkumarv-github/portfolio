@@ -56,8 +56,6 @@ INPUT AND DATA
 - Google Sheets: private Drive export first when credentials exist; public XLSX
   export fallback where possible.
 - Local Google credentials: GOOGLE_SERVICE_ACCOUNT_JSON.
-- Lambda credentials: Secrets Manager ID in
-  GOOGLE_SERVICE_ACCOUNT_SECRET_ID. Never put Google JSON in Lambda env vars.
 
 STATE
 Lambda /tmp is ephemeral and per execution environment:
@@ -69,8 +67,7 @@ this durable storage. Recommend S3/DynamoDB/RDS only for a durability request.
 
 RESOURCE OWNERSHIP
 - Terraform: ACM, API Gateway custom domain/mapping,
-  Lambda execution IAM, GitHub OIDC IAM, encrypted Zappa artifact bucket,
-  Secrets Manager secret.
+  Lambda execution IAM, GitHub OIDC IAM, encrypted Zappa artifact bucket.
 - Zappa/CloudFormation: Lambda, REST API/stage/deployment, integration, invoke
   permission.
 - External/manual: Terraform backend S3 bucket, registrar, Cloudflare zone and
@@ -82,7 +79,7 @@ DEPLOYMENT
 0. External encrypted/versioned Terraform state bucket exists.
 1. Bootstrap the backend and GitHub OIDC role locally once.
 2. Phase 1 applies baseline Terraform and deploys or updates Zappa.
-3. Configure Google secret and GitHub secrets/variables.
+3. Configure GitHub secrets/variables.
 4. Ubuntu Validate workflow runs Django checks, pytest, Terraform checks, and
    CPython 3.11 manylinux2014 x86_64 wheel checks.
 5. Phase 2 publishes ACM validation DNS in Cloudflare, discovers the Zappa API
@@ -142,14 +139,12 @@ mindmap
         1536 MB
         30 seconds
         3 GB /tmp
-      Secrets Manager
       Ephemeral SQLite and files
     Ownership
       Terraform
         ACM and custom domain
         IAM and OIDC
         S3 artifact bucket
-        Google secret
       Zappa
         Lambda
         REST API and stage

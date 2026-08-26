@@ -98,12 +98,3 @@ jobs:
           else
             echo "✅ No active Zappa deployment found. Skipping undeploy."
           fi
-
-      - name: Step 3 - Clean up Secrets Manager
-        run: |
-          echo "Attempting to schedule Secrets Manager deletion..."
-          aws secretsmanager delete-secret \
-            --secret-id "${{ vars.PROJECT_NAME || 'finance-dash' }}/google-service-account" \
-            --recovery-window-in-days 7 \
-            --region "$AWS_REGION" || true
-          echo "✅ Secret scheduled for deletion (or didn't exist)."
