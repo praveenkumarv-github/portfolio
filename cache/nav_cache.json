@@ -3,6 +3,42 @@
     "nav": 61.0,
     "date": "28-Apr-2026",
     "scheme_name": "Kotak Bond",
-    "timestamp": "2026-08-18T06:58:13.931821"
+    "timestamp": "2026-09-05T16:17:39.216127"
+  },
+  "120716": {
+    "nav": 165.3512,
+    "date": "10-Sep-2026",
+    "scheme_name": "UTI Nifty 50 Index Fund",
+    "timestamp": "2026-09-11T18:28:09.233551"
+  },
+  "148745": {
+    "nav": 21.2916,
+    "date": "10-Sep-2026",
+    "scheme_name": "Kotak Nifty Next 50 Index Fund",
+    "timestamp": "2026-09-11T18:28:09.250312"
+  },
+  "153362": {
+    "nav": 12.4493,
+    "date": "10-Sep-2026",
+    "scheme_name": "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund",
+    "timestamp": "2026-09-11T18:28:09.264660"
+  },
+  "152392": {
+    "nav": 7.9304,
+    "date": "10-Sep-2026",
+    "scheme_name": "Nippon India Nifty IT Index Fund",
+    "timestamp": "2026-09-11T18:28:09.280925"
+  },
+  "133386": {
+    "nav": 67.5386,
+    "date": "10-Sep-2026",
+    "scheme_name": "Motilal Oswal ELSS Tax Saver Fund",
+    "timestamp": "2026-09-11T18:28:09.295441"
+  },
+  "149550": {
+    "nav": 16.4843,
+    "date": "10-Sep-2026",
+    "scheme_name": "Sundaram Arbitrage Fund(Formerly Known as Prinicpal Arbitrage Fund)",
+    "timestamp": "2026-09-11T18:28:09.309679"
   }
 }

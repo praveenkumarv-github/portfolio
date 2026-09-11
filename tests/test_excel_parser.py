@@ -189,6 +189,37 @@ class TestExcelParserHappyPath:
         finally:
             os.unlink(path)
 
+    def test_symbol_column_is_passed_to_nav_service(self, mock_metal):
+        with patch("dashboard.services.excel_parser.get_nav_service") as mock_factory:
+            adapter = mock_factory.return_value
+
+            def _side_effect(identifier, fund_name="", symbol=""):
+                if identifier == "120716" and symbol == "MUTF_IN:UTI_NIFT_50_FGX2CX":
+                    return (170.22, "Symbol (MUTF_IN:UTI_NIFT_50_FGX2CX)")
+                return (None, "Not Available")
+
+            adapter.get_nav.side_effect = _side_effect
+
+            rows = [{
+                "FundName": "UTI Nifty 50 Index Fund Direct Growth",
+                "Units": 10.0,
+                "Identifier": "120716",
+                "Symbol": "MUTF_IN:UTI_NIFT_50_FGX2CX",
+            }]
+            path = _build_excel(_minimal_sheets(mf_rows=rows))
+            try:
+                from dashboard.services.excel_parser import parse_excel_file
+
+                result = parse_excel_file(path)
+                fund = result["data"]["mutual_funds"][0]
+
+                assert fund["symbol"] == "MUTF_IN:UTI_NIFT_50_FGX2CX"
+                assert fund["nav"] == pytest.approx(170.22)
+                assert fund["current_value"] == pytest.approx(1702.2)
+                assert "Symbol" in fund["nav_source"]
+            finally:
+                os.unlink(path)
+
 
 # ---------------------------------------------------------------------------
 # Error handling
@@ -294,3 +325,86 @@ class TestAllocationCorrectness:
             assert ti != pytest.approx(mf + ret + liq)
         finally:
             os.unlink(path)
+
+
+@patch("dashboard.services.excel_parser.get_metal_price", return_value=(6000.0, "Cached"))
+@patch("dashboard.services.excel_parser.get_nav_service")
+class TestOptionalSheets:
+    def test_missing_optional_sheets_default_to_empty(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        path = _build_excel(_minimal_sheets())
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            data = parse_excel_file(path)["data"]
+            assert data["mf_transactions"] == []
+            assert data["lookthrough_overrides"] == []
+            assert data["targets"] == {}
+        finally:
+            os.unlink(path)
+
+    def test_mf_transactions_parsed_with_computed_amount(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets()
+        sheets["MFTransactions"] = pd.DataFrame([
+            {"FundIdentifier": "119551", "Date": "2026-08-07", "Type": "Invested", "Units": 173.393, "NAV": 173.0145},
+            {"FundIdentifier": "119551", "Date": "2026-09-03", "Type": "invested", "Units": 59.48, "NAV": 168.12},
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            data = parse_excel_file(path)["data"]
+            txns = data["mf_transactions"]
+            assert len(txns) == 2
+            assert txns[0]["identifier"] == "119551"
+            assert txns[0]["type"] == "Invested"
+            assert txns[0]["amount"] == pytest.approx(173.393 * 173.0145, rel=1e-6)
+        finally:
+            os.unlink(path)
+
+    def test_mf_transactions_invalid_type_is_skipped_with_warning(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets()
+        sheets["MFTransactions"] = pd.DataFrame([
+            {"FundIdentifier": "119551", "Date": "2026-08-07", "Type": "Dividend", "Units": 1.0, "NAV": 100.0},
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            result = parse_excel_file(path)
+            assert result["data"]["mf_transactions"] == []
+            assert any("Unknown Type" in w for w in result["warnings"])
+        finally:
+            os.unlink(path)
+
+    def test_lookthrough_overrides_parsed(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets()
+        sheets["LookThrough"] = pd.DataFrame([
+            {"Key": "NPS", "Equity": 50, "CorporateDebt": 30, "GovtSecurities": 20, "Cash": 0, "Gold": 0, "Other": 0},
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            data = parse_excel_file(path)["data"]
+            overrides = data["lookthrough_overrides"]
+            assert len(overrides) == 1
+            assert overrides[0]["key"] == "NPS"
+            assert overrides[0]["equity"] == pytest.approx(50.0)
+        finally:
+            os.unlink(path)
+
+    def test_targets_sheet_parsed(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets()
+        sheets["Targets"] = pd.DataFrame([
+            {"AssetClass": "Equity", "TargetPct": 55},
+            {"AssetClass": "Gold", "TargetPct": 10},
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            data = parse_excel_file(path)["data"]
+            assert data["targets"] == {"Equity": 55.0, "Gold": 10.0}
+        finally:
+            os.unlink(path)
+

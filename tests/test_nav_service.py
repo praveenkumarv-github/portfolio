@@ -33,6 +33,13 @@ _INVALID_NAV_BLOCK = """\
 119998;INF000K01YY1;INF000K01YY2;Invalid Fund Huge NAV;99999.9;30-Apr-2026
 """
 
+_NEW_AMFI_BLOCK = """\
+Scheme Code;ISIN Div Payout/ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Repurchase Price;Sale Price;Date
+Open Ended Schemes (Equity Scheme - Index Funds)
+120716;INF209K01VN8;-;UTI Nifty 50 Index Fund - Direct Plan;Growth;20.1234;20.1234;28-Aug-2026
+148745;INF174K01LS2;-;Kotak Nifty Next 50 Index Fund - Direct Plan;Growth;17.5678;17.5678;28-Aug-2026
+"""
+
 
 # ---------------------------------------------------------------------------
 # Parser unit tests
@@ -80,6 +87,13 @@ class TestAMFIParser:
         from dashboard.services.nav_service import _parse_amfi_text
         idx = _parse_amfi_text("")
         assert idx == {}
+
+    def test_parses_new_amfi_layout_with_plan_option_columns(self):
+        from dashboard.services.nav_service import _parse_amfi_text
+        idx = _parse_amfi_text(_NEW_AMFI_BLOCK)
+        assert "120716" in idx
+        assert idx["120716"]["nav"] == pytest.approx(20.1234)
+        assert idx["120716"]["date"] == "28-Aug-2026"
 
     def test_scheme_name_preserved(self):
         from dashboard.services.nav_service import _parse_amfi_text
@@ -142,6 +156,15 @@ class TestGetNAV:
             nav, src = get_nav("119552")
         assert nav == pytest.approx(25.4567)
 
+    def test_float_like_scheme_code_is_normalized(self, tmp_nav_cache):
+        from dashboard.services.nav_service import get_nav, _parse_amfi_text
+        idx = _parse_amfi_text(_NEW_AMFI_BLOCK)
+        with patch("dashboard.services.nav_service._read_cache", return_value={}):
+            with patch("dashboard.services.nav_service._get_amfi_index", return_value=idx):
+                nav, src = get_nav("120716.0")
+        assert nav == pytest.approx(20.1234)
+        assert "AMFI" in src
+
     def test_invalid_isin_returns_zero(self, tmp_nav_cache):
         """Unknown identifier returns (0.0, 'Not Available')."""
         from dashboard.services.nav_service import get_nav
@@ -194,6 +217,18 @@ class TestGetNAV:
                 nav, src = get_nav("119551")
         assert nav == pytest.approx(55.678)
         assert "MFAPI" in src
+
+    def test_symbol_fallback_when_mfapi_fails(self, tmp_nav_cache):
+        """When AMFI and MFAPI fail, use Symbol fallback."""
+        from dashboard.services.nav_service import get_nav
+
+        with patch("dashboard.services.nav_service._get_amfi_index", return_value={}):
+            with patch("dashboard.services.nav_service._fetch_mfapi", return_value=None):
+                with patch("dashboard.services.nav_service._fetch_symbol_nav", return_value=(170.22, "MUTF_IN:UTI_NIFT_50_FGX2CX")):
+                    nav, src = get_nav("120716", "UTI Nifty 50", "MUTF_IN:UTI_NIFT_50_FGX2CX")
+
+        assert nav == pytest.approx(170.22)
+        assert "Symbol" in src
 
     def test_stale_cache_offline_fallback(self, tmp_nav_cache):
         """When live fails but stale cache exists, return stale."""

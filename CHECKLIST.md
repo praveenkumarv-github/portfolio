@@ -109,3 +109,66 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 - Cert / DNS / mapping change: **Phase 2**.
 - Rollback: `zappa rollback production -n 1`.
 - Teardown: **Destroy Lambda App** workflow (type `DESTROY`).
+
+## 10. Workbook Preparation (Optional Advanced Features)
+
+The dashboard works with a minimal Excel workbook containing the six required sheets. For XIRR, gain analysis, and economic asset allocation, add optional sheets:
+
+### MFTransactions (Optional: Per-Fund XIRR and Gain Analysis)
+Track SIP or lump-sum investments per mutual fund to enable XIRR, absolute return %, and transaction history:
+
+| Column | Type | Example | Notes |
+|--------|------|---------|-------|
+| FundIdentifier | Text | 120716 | Must match the Identifier in MutualFunds sheet |
+| Date | Date | 2025-08-07 | Transaction date (earliest first within a fund) |
+| Type | Text | Invested | Or Redeemed (case-insensitive); unknown types are skipped with a warning |
+| Units | Number | 173.393 | Units bought/sold |
+| NAV | Number | 173.0145 | NAV on transaction date |
+
+- Amount is auto-computed as `Units × NAV`.
+- All dates must be in the past (≤ today) for XIRR to solve.
+- At least 2 cashflows (e.g., 1 investment + current value) are required for a meaningful XIRR.
+- The validator warns if a fund's total (Invested - Redeemed) units don't match its declared Units; fix the ledger to avoid gain/XIRR inaccuracy.
+
+### LookThrough (Optional: Economic Asset Allocation Overrides)
+Declare the underlying economic mix of funds and retirement instruments to see "what you actually own" vs. product labels:
+
+| Column | Type | Example | Notes |
+|--------|------|---------|-------|
+| Key | Text | 120716 or NPS | Fund Identifier or instrument Type (PF, EPF, NPS, FD, Cash, etc.) |
+| Equity | Number | 50 | Percent in equity bucket |
+| CorporateDebt | Number | 30 | Percent in corporate debt bucket |
+| GovtSecurities | Number | 20 | Percent in government securities |
+| Cash | Number | 0 | Percent in cash |
+| Gold | Number | 0 | Percent in gold |
+| Other | Number | 0 | Percent in other/unclassified |
+| (Optional) EquityLarge | Number | 60 | Equity style: large cap % |
+| (Optional) EquityMid | Number | 25 | Mid cap % |
+| (Optional) EquitySmall | Number | 15 | Small cap % |
+| (Optional) EquityIntl | Number | 0 | International % |
+
+- Percentages are normalized to 100 by the parser.
+- Without overrides, defaults are used: Equity Funds → 100% Equity; Debt Funds → 100% Corporate Debt; Hybrid → 60/40; EPF → 85% Govt Sec / 15% Equity; NPS → Unclassified (no guess).
+- Use this sheet to surface hidden equity (e.g., EPF's 15%, arbitrage fund's 20% equity slice).
+
+### Targets (Optional: Deviation Analysis)
+Specify your target allocation to see Current % vs. Target % vs. Deviation for each asset class:
+
+| Column | Type | Example | Notes |
+|--------|------|---------|-------|
+| AssetClass | Text | Equity | Bucket label (Equity, Corporate Debt, Government Securities, Cash, Gold) |
+| TargetPct | Number | 55 | Target percentage for this class |
+
+- Deviation = (Current % - Target %) in percentage points.
+- Positive deviation = over target; negative = under target.
+- Omit a row to have no target for that class.
+
+### Sample Workbook Generation
+Run locally to generate a complete sample with realistic SIP data:
+
+```bash
+python generate_sample_excel.py
+```
+
+Output: `sample_finance_data.xlsx` with 6 required sheets + 12-month SIP example + NPS override + Targets.
+

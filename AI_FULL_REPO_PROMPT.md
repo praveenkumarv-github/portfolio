@@ -36,9 +36,10 @@ unless I explicitly ask for analysis or a plan only.
 NON-NEGOTIABLE FINANCIAL INVARIANT
 Do not alter portfolio formulas, workbook schema semantics, net-worth treatment,
 allocation, aggregation, NAV interpretation, metal valuation, snapshot meaning,
-or alert rules unless the issue explicitly asks for a financial-logic change.
-Security, deployment, authentication, storage, UI, and integration fixes must
-preserve financial behavior.
+alert rules, XIRR computation, economic bucket classification, or
+transaction-ledger reconciliation logic unless the issue explicitly asks for a
+financial-logic change. Security, deployment, authentication, storage, UI, and
+integration fixes must preserve financial behavior.
 
 FACT DISCIPLINE
 - Inspect attached files before drawing conclusions.

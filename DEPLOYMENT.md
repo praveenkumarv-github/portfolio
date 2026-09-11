@@ -14,6 +14,33 @@ flowchart LR
 
 Cloudflare Access authorizes one Google identity before forwarding a request. Django then verifies the `Cf-Access-Jwt-Assertion` signature, issuer, audience, expiry, and exact email. This second check denies raw `execute-api` requests that do not contain a valid application token.
 
+## Workbook Schema
+
+Uploaded Excel workbooks must contain these required sheets:
+
+| Sheet | Columns | Purpose |
+|-------|---------|---------|
+| **MutualFunds** | FundName, Units, Identifier, Symbol | Mutual fund holdings and AMFI codes |
+| **Retirement** | Type, Amount | EPF, NPS, PF balances |
+| **Liquid** | AccountName, Type, Amount | Savings, current accounts |
+| **EmergencyFund** | AccountName, Type, Amount, MaturityDate | FD, RD, dedicated reserves |
+| **Insurance** | Type, Provider, Premium, Coverage | Term, health, life policies |
+| **Metals** | Type, Quantity | Gold/Silver holdings in grams |
+
+Three optional sheets enable advanced analytics:
+
+| Sheet | Columns | Purpose |
+|-------|---------|---------|
+| **MFTransactions** (optional) | FundIdentifier, Date, Type, Units, NAV | SIP/lump-sum ledger; drives XIRR and gain analysis |
+| **LookThrough** (optional) | Key, Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other, [EquityLarge, EquityMid, EquitySmall, EquityIntl] | Economic look-through overrides per fund or instrument |
+| **Targets** (optional) | AssetClass, TargetPct | Target allocation percentages for deviation analysis |
+
+- MFTransactions: `Type` accepts Invested/Redeemed (case-insensitive). `Amount` is auto-computed as `Units × NAV` if not supplied. Invalid types are skipped with a warning.
+- LookThrough: `Key` is the fund Identifier (mutual funds) or Type (retirement/liquid/EF/metals). Percentages in buckets should sum to 100; they are normalized by the parser. Equity style columns are optional and used only when supplied.
+- Targets: `AssetClass` is matched case-insensitively to bucket labels (Equity, Gold, etc.). Percentages are the target allocations; deviations show actual % minus target %.
+
+A workbook without optional sheets is valid and supported. The dashboard computes transaction analytics (XIRR, gain) and economic allocation with built-in defaults for funds without explicit overrides.
+
 ## Prerequisites
 
 - AWS account and an authenticated local AWS identity for initial Terraform bootstrap.

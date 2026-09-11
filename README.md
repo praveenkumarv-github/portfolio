@@ -99,6 +99,33 @@ sequenceDiagram
 - Unique imported filenames to prevent a repeated Google import from deleting
   its newly downloaded workbook.
 
+### Per-Fund Transaction Analytics and XIRR
+
+- MFTransactions sheet (optional) records SIP and lump-sum investment history.
+- XIRR solver in pure Python (Newton-Raphson with bisection fallback, no
+  external dependencies) computes annualized returns from irregular cashflows.
+- Per-fund analytics: invested amount, absolute gain, absolute return %, XIRR,
+  first investment date, and transaction history displayed inline.
+- Portfolio-level XIRR: pools return across only funds with recorded
+  transactions (avoiding artificial gains from untracked funds).
+- Data-quality validator: warns if MFTransactions net units don't reconcile
+  within ±0.5% of declared units.
+
+### Economic Asset Allocation (Look-Through)
+
+- LookThrough sheet (optional) maps all holdings to six standard buckets:
+  Equity, Corporate Debt, Government Securities, Cash, Gold, Other.
+- Default look-through assumptions for common product types:
+  - Equity/Hybrid/Debt funds, Gilt funds, Arbitrage funds (20% equity).
+  - Retirement: EPF (85% Govt Sec, 15% Equity), NPS (unclassified by default),
+    PPF (100% Govt Sec).
+  - Cash-like: FD, RD, Savings, current accounts.
+- Hidden equity detection: compares effective (look-through) equity % to naive
+  (label-only) equity %, surfacing opaque exposure in hybrid/EPF/arbitrage.
+- Optional equity style split: Large/Mid/Small/International caps per bucket.
+- Targets sheet (optional) specifies target allocations; dashboard shows Current
+  % vs. Target % vs. Deviation for each bucket.
+
 ### Workbook and application security
 
 - Maximum compressed workbook size: 10 MB.
@@ -154,7 +181,7 @@ calculations, and alert rules were not changed by these enhancements.
 1. The user uploads an XLSX file or supplies a Google Sheet URL.
 2. The workbook validator rejects unsafe or malformed files.
 3. The parser reads the supported sheets and columns.
-4. AMFI resolves mutual-fund NAV, with MFAPI as fallback.
+4. AMFI resolves mutual-fund NAV, with MFAPI and Symbol fallback.
 5. GoodReturns resolves metal prices, with cache, manual value, and configured
    defaults as fallback.
 6. The calculation engine produces allocation, net worth, risk coverage, and
@@ -163,16 +190,33 @@ calculations, and alert rules were not changed by these enhancements.
 
 ### Excel schema
 
-| Sheet | Required columns |
-|---|---|
-| `MutualFunds` | `FundName`, `Units`, `Identifier` |
-| `Retirement` | `Type`, `Amount` |
-| `Liquid` | `AccountName`, `Type`, `Amount` |
-| `EmergencyFund` | `AccountName`, `Type`, `Amount`, `MaturityDate` |
-| `Insurance` | `Type`, `Provider`, `Premium`, `Coverage` |
-| `Metals` | `Type`, `Quantity` |
+**Required sheets:**
 
-`Identifier` is an AMFI scheme code or ISIN. `MaturityDate` uses `YYYY-MM-DD`.
+| Sheet | Required columns | Purpose |
+|---|---|---|
+| `MutualFunds` | `FundName`, `Units`, `Identifier` | Fund holdings with AMFI codes |
+| `Retirement` | `Type`, `Amount` | EPF, NPS, PF balances |
+| `Liquid` | `AccountName`, `Type`, `Amount` | Savings, current accounts |
+| `EmergencyFund` | `AccountName`, `Type`, `Amount`, `MaturityDate` | FD, RD, dedicated reserves |
+| `Insurance` | `Type`, `Provider`, `Premium`, `Coverage` | Term, health, life (excluded from net worth) |
+| `Metals` | `Type`, `Quantity` | Gold/Silver in grams |
+
+**Optional sheets (enable advanced analytics):**
+
+| Sheet | Key columns | Purpose |
+|---|---|---|
+| `MFTransactions` | `FundIdentifier`, `Date`, `Type`, `Units`, `NAV` | SIP/lump-sum ledger (drives XIRR and gain) |
+| `LookThrough` | `Key`, `Equity`, `CorporateDebt`, `GovtSecurities`, `Cash`, `Gold`, `Other` | Economic bucket overrides per fund/type |
+| `Targets` | `AssetClass`, `TargetPct` | Target allocations for deviation tracking |
+
+`Identifier` is an AMFI scheme code or ISIN. Optional `Symbol` (for example, `MUTF_IN:...`) can be used as a fallback when AMFI/MFAPI are unavailable. `MaturityDate` uses `YYYY-MM-DD`.
+
+MFTransactions: `Type` accepts Invested/Redeemed (case-insensitive); `Amount` auto-computed as `Units × NAV`. Unknown transaction types are skipped with a warning.
+
+LookThrough: `Key` is the fund Identifier or instrument Type (PF, EPF, NPS, etc.). Bucket percentages are normalized to 100. Optional equity-style columns (EquityLarge, EquityMid, EquitySmall, EquityIntl) refine equity classification when present.
+
+Targets: `AssetClass` matched case-insensitively to bucket labels. Omit a row to have no target for that class.
+
 Insurance is risk coverage and is intentionally excluded from net worth.
 
 ### Storage durability

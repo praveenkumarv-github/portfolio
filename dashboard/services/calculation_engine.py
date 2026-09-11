@@ -16,7 +16,10 @@ build_portfolio(data: dict) -> PortfolioSummary
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Any
+from datetime import date as _date
+from typing import Dict, List, Any, Optional
+
+from .xirr import xirr as _xirr
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +90,9 @@ class PortfolioSummary:
     risk_rows: List[RiskRow]
     risk_summary: dict       # {total_coverage, total_premium, policy_count, monthly_expense}
 
+    # Invested-vs-current analytics for mutual funds (SIP/lump-sum ledger, optional)
+    mf_analytics: dict = field(default_factory=dict)
+
     has_data: bool = True
 
 
@@ -112,6 +118,23 @@ _HEALTH_COVERAGE_MIN = 500_000   # ₹5 L minimum health coverage per policy
 
 def _pct(part: float, total: float) -> float:
     return round((part / total) * 100, 1) if total > 0 else 0.0
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _non_negative(value: Any) -> float:
+    return max(_safe_float(value), 0.0)
+
+
+def _total_from_rows(rows: List[dict], value_key: str, summary_value: Any) -> float:
+    if rows:
+        return sum(_non_negative(row.get(value_key, 0)) for row in rows)
+    return _non_negative(summary_value)
 
 
 def _ef_alert(ef_total: float, monthly_expense: float) -> str:
@@ -153,16 +176,108 @@ def _mini_chart(labels: List[str], values: List[float], colours: List[str]) -> d
     return {"labels": out_l, "values": out_v, "colours": out_c}
 
 
+def _fund_transaction_analytics(identifier: str, txns: List[dict], current_value: float) -> dict:
+    """Invested amount, absolute gain, and XIRR for one fund's SIP/lump-sum ledger.
+
+    net_invested is a simple invested-minus-redeemed running balance (not a
+    FIFO/LIFO cost-basis reconstruction) — adequate for a gain/XIRR view but
+    not for tax-lot accounting.
+    """
+    fund_txns = sorted(
+        (t for t in txns if t.get("identifier") == identifier),
+        key=lambda t: t["date"],
+    )
+    if not fund_txns:
+        return {
+            "transactions": [],
+            "invested_amount": 0.0,
+            "redeemed_amount": 0.0,
+            "net_invested": 0.0,
+            "absolute_gain": 0.0,
+            "absolute_return_pct": None,
+            "xirr_pct": None,
+            "first_investment_date": None,
+        }
+
+    invested = sum(_non_negative(t["amount"]) for t in fund_txns if t["type"] == "Invested")
+    redeemed = sum(_non_negative(t["amount"]) for t in fund_txns if t["type"] == "Redeemed")
+    net_invested = invested - redeemed
+
+    cashflows = [
+        (t["date"], -_non_negative(t["amount"]) if t["type"] == "Invested" else _non_negative(t["amount"]))
+        for t in fund_txns
+    ]
+    if current_value > 0:
+        cashflows.append((_date.today(), current_value))
+
+    rate = _xirr(cashflows)
+    absolute_gain = current_value - net_invested
+
+    return {
+        "transactions": fund_txns,
+        "invested_amount": invested,
+        "redeemed_amount": redeemed,
+        "net_invested": net_invested,
+        "absolute_gain": absolute_gain,
+        "absolute_return_pct": _pct(absolute_gain, net_invested) if net_invested > 0 else None,
+        "xirr_pct": round(rate * 100, 2) if rate is not None else None,
+        "first_investment_date": fund_txns[0]["date"],
+    }
+
+
+def _portfolio_mf_analytics(mf_list: List[dict], mf_txns: List[dict]) -> dict:
+    """Pooled invested-vs-current + XIRR across only the funds that have a
+    recorded transaction ledger — NOT the whole mf_total, otherwise funds
+    with no ledger would inflate the pooled gain as if free money.
+    """
+    tracked_identifiers = {t.get("identifier") for t in mf_txns}
+    tracked_current_value = sum(
+        _safe_float(f.get("current_value", 0))
+        for f in mf_list
+        if f.get("identifier") in tracked_identifiers
+    )
+
+    cashflows = []
+    invested = 0.0
+    redeemed = 0.0
+    for t in mf_txns:
+        amt = _non_negative(t.get("amount", 0))
+        if t.get("type") == "Invested":
+            cashflows.append((t["date"], -amt))
+            invested += amt
+        elif t.get("type") == "Redeemed":
+            cashflows.append((t["date"], amt))
+            redeemed += amt
+
+    if tracked_current_value > 0:
+        cashflows.append((_date.today(), tracked_current_value))
+
+    net_invested = invested - redeemed
+    rate = _xirr(cashflows) if cashflows else None
+    absolute_gain = tracked_current_value - net_invested
+
+    return {
+        "invested_amount": invested,
+        "redeemed_amount": redeemed,
+        "net_invested": net_invested,
+        "tracked_current_value": tracked_current_value,
+        "absolute_gain": absolute_gain,
+        "absolute_return_pct": _pct(absolute_gain, net_invested) if net_invested > 0 else None,
+        "xirr_pct": round(rate * 100, 2) if rate is not None else None,
+        "has_transactions": bool(mf_txns),
+    }
+
+
 def _classify_fund_type(fund: dict) -> str:
     """Classify a mutual fund into Equity/Debt/Hybrid using type or name hints."""
     direct = str(fund.get("fund_type", "")).strip().lower()
     if direct:
-        if "equity" in direct:
-            return "Equity"
-        if "debt" in direct or "bond" in direct or "income" in direct:
-            return "Debt"
         if "hybrid" in direct or "balanced" in direct or "arbitrage" in direct:
             return "Hybrid"
+        if "debt" in direct or "bond" in direct or "income" in direct:
+            return "Debt"
+        if "equity" in direct:
+            return "Equity"
 
     name = str(fund.get("fund_name", "")).lower()
     equity_keys = (
@@ -178,12 +293,12 @@ def _classify_fund_type(fund: dict) -> str:
         "dynamic asset", "conservative", "aggressive",
     )
 
-    if any(k in name for k in equity_keys):
-        return "Equity"
-    if any(k in name for k in debt_keys):
-        return "Debt"
     if any(k in name for k in hybrid_keys):
         return "Hybrid"
+    if any(k in name for k in debt_keys):
+        return "Debt"
+    if any(k in name for k in equity_keys):
+        return "Equity"
     return "Hybrid"
 
 
@@ -192,15 +307,31 @@ def _classify_fund_type(fund: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def build_portfolio(data: dict) -> PortfolioSummary:
-    # ── Raw totals ────────────────────────────────────────────────────────
-    mf_total  = float(data.get("mutual_funds_summary", {}).get("total_current_value", 0))
-    ret_total = float(data.get("retirement_total", 0))
-    liq_total = float(data.get("liquid_total", 0))
-    ef_total  = float(data.get("emergency_fund_total", 0))
-    met_total = float(data.get("metals_total", 0))
+    mf_list = [dict(f) for f in (data.get("mutual_funds") or [])]
+    ret_list = [dict(item) for item in (data.get("retirement") or [])]
+    liq_list = [dict(item) for item in (data.get("liquid") or [])]
+    ef_list = [dict(item) for item in (data.get("emergency_fund") or [])]
+    met_list = [dict(item) for item in (data.get("metals") or [])]
 
-    ins_prem  = float(data.get("insurance_summary", {}).get("total_premium", 0))
-    ins_cov   = float(data.get("insurance_summary", {}).get("total_coverage", 0))
+    for fund in mf_list:
+        fund["current_value"] = _non_negative(fund.get("current_value", 0))
+    for item in ret_list:
+        item["amount"] = _non_negative(item.get("amount", 0))
+    for item in liq_list:
+        item["amount"] = _non_negative(item.get("amount", 0))
+    for item in ef_list:
+        item["amount"] = _non_negative(item.get("amount", 0))
+    for item in met_list:
+        item["value"] = _non_negative(item.get("value", 0))
+
+    mf_total = _total_from_rows(mf_list, "current_value", (data.get("mutual_funds_summary") or {}).get("total_current_value", 0))
+    ret_total = _total_from_rows(ret_list, "amount", data.get("retirement_total", 0))
+    liq_total = _total_from_rows(liq_list, "amount", data.get("liquid_total", 0))
+    ef_total = _total_from_rows(ef_list, "amount", data.get("emergency_fund_total", 0))
+    met_total = _total_from_rows(met_list, "value", data.get("metals_total", 0))
+
+    ins_prem = _non_negative((data.get("insurance_summary") or {}).get("total_premium", 0))
+    ins_cov = _non_negative((data.get("insurance_summary") or {}).get("total_coverage", 0))
 
     # net_worth = assets only (insurance excluded)
     net_worth = mf_total + ret_total + liq_total + ef_total + met_total
@@ -270,22 +401,27 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         category_comparison_meta = {"largest": None, "underweight": None}
 
     # ── Per-blade mini charts ─────────────────────────────────────────────
-    mf_list = data.get("mutual_funds", [])
-    
     # Pre-calculate mutual fund percentages against mf_total
     for f in mf_list:
-        f["pct"] = _pct(float(f.get("current_value", 0)), mf_total)
+        f["pct"] = _pct(_safe_float(f.get("current_value", 0)), mf_total)
+
+    mf_txns_raw = data.get("mf_transactions") or []
+    for f in mf_list:
+        f.update(_fund_transaction_analytics(
+            f.get("identifier", ""), mf_txns_raw, _safe_float(f.get("current_value", 0))
+        ))
+    mf_analytics = _portfolio_mf_analytics(mf_list, mf_txns_raw)
 
     mf_chart = _mini_chart(
-        [f.get("fund_name", "Fund")[:20] for f in mf_list],
-        [float(f.get("current_value", 0)) for f in mf_list],
+        [str(f.get("fund_name", "Fund"))[:20] for f in mf_list],
+        [_safe_float(f.get("current_value", 0)) for f in mf_list],
         [f"hsl({(i*47)%360},60%,55%)" for i in range(len(mf_list))],
     )
 
     mf_split_totals = {"Equity": 0.0, "Debt": 0.0, "Hybrid": 0.0}
     for fund in mf_list:
         bucket = _classify_fund_type(fund)
-        mf_split_totals[bucket] += float(fund.get("current_value", 0))
+        mf_split_totals[bucket] += _safe_float(fund.get("current_value", 0))
     mf_split = []
     for label in ("Equity", "Debt", "Hybrid"):
         val = mf_split_totals[label]
@@ -297,14 +433,13 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         ["#4f8ef7", "#7c5cf6", "#34c79a"],
     )
 
-    liq_list = data.get("liquid", [])
     for item in liq_list:
-        item["pct"] = _pct(float(item.get("amount", 0)), liq_total)
+        item["pct"] = _pct(_safe_float(item.get("amount", 0)), liq_total)
 
     liquid_type_totals: Dict[str, float] = {}
     for item in liq_list:
-        label = item.get("type") or "Other"
-        liquid_type_totals[label] = liquid_type_totals.get(label, 0.0) + float(item.get("amount", 0))
+        label = str(item.get("type") or "Other")
+        liquid_type_totals[label] = liquid_type_totals.get(label, 0.0) + _safe_float(item.get("amount", 0))
 
     liquid_split = [
         {"type": label, "value": value, "pct": _pct(value, liq_total)}
@@ -312,46 +447,47 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     ]
 
     liq_chart = _mini_chart(
-        [a.get("account_name", "Account") for a in liq_list],
-        [float(a.get("amount", 0)) for a in liq_list],
+        [str(a.get("account_name", "Account")) for a in liq_list],
+        [_safe_float(a.get("amount", 0)) for a in liq_list],
         [f"hsl({(i*67+120)%360},55%,50%)" for i in range(len(liq_list))],
     )
 
-    ret_list = data.get("retirement", [])
     for item in ret_list:
-        item["pct"] = _pct(float(item.get("amount", 0)), ret_total)
+        item["pct"] = _pct(_safe_float(item.get("amount", 0)), ret_total)
 
     retirement_split = [
         {
-            "type": item.get("type") or "Other",
-            "value": float(item.get("amount", 0)),
+            "type": str(item.get("type") or "Other"),
+            "value": _safe_float(item.get("amount", 0)),
             "pct": item["pct"],
         }
         for item in sorted(ret_list, key=lambda row: float(row.get("amount", 0)), reverse=True)
         if float(item.get("amount", 0)) > 0
     ]
 
-    ef_bt = data.get("emergency_fund_by_type", {})
+    ef_bt: Dict[str, float] = {}
+    for item in ef_list:
+        label = str(item.get("type") or "Other")
+        ef_bt[label] = ef_bt.get(label, 0.0) + _safe_float(item.get("amount", 0))
     emergency_fund_split = [
-        {"type": key or "Other", "value": float(value), "pct": _pct(float(value), ef_total)}
+        {"type": str(key or "Other"), "value": _safe_float(value), "pct": _pct(_safe_float(value), ef_total)}
         for key, value in sorted(ef_bt.items(), key=lambda pair: float(pair[1]), reverse=True)
-        if float(value) > 0
+        if _safe_float(value) > 0
     ]
 
     ef_chart = _mini_chart(
-        list(ef_bt.keys()),
-        [float(v) for v in ef_bt.values()],
+        [str(k) for k in ef_bt.keys()],
+        [_safe_float(v) for v in ef_bt.values()],
         ["#f06b6b", "#fb923c", "#fbbf24", "#34d399", "#60a5fa"],
     )
 
-    met_list = data.get("metals", [])
     for item in met_list:
-        item["pct"] = _pct(float(item.get("value", 0)), met_total)
+        item["pct"] = _pct(_safe_float(item.get("value", 0)), met_total)
 
     metals_split = [
         {
-            "type": item.get("type") or "Metal",
-            "value": float(item.get("value", 0)),
+            "type": str(item.get("type") or "Metal"),
+            "value": _safe_float(item.get("value", 0)),
             "pct": item["pct"],
         }
         for item in sorted(met_list, key=lambda row: float(row.get("value", 0)), reverse=True)
@@ -359,20 +495,20 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     ]
 
     metals_chart = _mini_chart(
-        [m.get("type", "Metal") for m in met_list],
-        [float(m.get("value", 0)) for m in met_list],
+        [str(m.get("type", "Metal")) for m in met_list],
+        [_safe_float(m.get("value", 0)) for m in met_list],
         ["#e8b44a", "#90a8be"],
     )
 
     # ── Risk / insurance ──────────────────────────────────────────────────
     risk_rows: List[RiskRow] = []
-    for pol in data.get("insurance", []):
+    for pol in (data.get("insurance") or []):
         status, level = _insurance_status(pol)
         risk_rows.append(RiskRow(
             type=pol.get("type", ""),
             provider=pol.get("provider", ""),
-            coverage=float(pol.get("coverage", 0)),
-            premium=float(pol.get("premium", 0)),
+            coverage=_non_negative(pol.get("coverage", 0)),
+            premium=_non_negative(pol.get("premium", 0)),
             status=status,
             status_level=level,
         ))
@@ -415,9 +551,10 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         mutual_funds=mf_list,
         retirement=ret_list,
         liquid=liq_list,
-        emergency_fund=data.get("emergency_fund", []),
+        emergency_fund=ef_list,
         emergency_fund_by_type=ef_bt,
         metals=met_list,
         risk_rows=risk_rows,
         risk_summary=risk_summary,
+        mf_analytics=mf_analytics,
     )

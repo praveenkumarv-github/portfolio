@@ -75,6 +75,7 @@ def dashboard_view(request):
         "errors": [],
         "warnings": [],
         "snapshots": [],
+        "economic_allocation": None,
     }
 
     last_upload = FileUploadHistory.objects.first()

@@ -26,14 +26,18 @@ the conflict and follow code/tests. Do not invent resources, settings, command
 results, or successful cloud operations.
 
 APP
-Single-user Django personal-finance dashboard. Input is a local XLSX workbook or
-Google Sheet. It resolves mutual-fund NAV and metal prices, calculates portfolio
-values/alerts, and renders charts. Local runtime is Windows-compatible; target
+Single-user Django personal-finance dashboard with transaction analytics and
+economic asset allocation. Input is a local XLSX workbook or Google Sheet.
+It resolves mutual-fund NAV and metal prices, calculates portfolio values/
+alerts, computes per-fund and portfolio XIRR from transaction ledgers, maps
+hholdings to economic asset-class buckets (with look-through for hybrid/EPF),
+and renders interactive charts. Local runtime is Windows-compatible; target
 runtime is Python 3.11 on Ubuntu CI and AWS Lambda.
 
 CRITICAL INVARIANT
 Unless explicitly requested, do not change financial formulas, workbook schema
-semantics, aggregation, allocation, net-worth treatment, or alert rules.
+semantics, aggregation, allocation, net-worth treatment, alert rules, XIRR
+computation, or economic bucket classification logic.
 
 RUNTIME
 - Django 5.2; local settings: finance_dashboard.settings.
@@ -47,10 +51,20 @@ RUNTIME
 - Raw API Gateway access without a valid Access JWT must return HTTP 403.
 
 INPUT AND DATA
-- Workbook sheets: MutualFunds, Retirement, Liquid, EmergencyFund, Insurance,
-  Metals. Insurance coverage is excluded from net worth.
+- Workbook sheets:
+  - Required: MutualFunds, Retirement, Liquid, EmergencyFund, Insurance, Metals.
+  - Optional: MFTransactions (SIP/lump-sum ledger per fund, powers XIRR/gain),
+    LookThrough (economic look-through overrides), Targets (target allocation %).
+  - Insurance coverage is excluded from net worth.
 - XLSX limits: 10 MB compressed, 100 MB expanded, 2,000 ZIP entries; reject
   empty, encrypted, malformed, or disguised files.
+- MFTransactions columns: FundIdentifier, Date, Type (Invested/Redeemed),
+  Units, NAV. Amount auto-computed as Units × NAV.
+- LookThrough columns: Key (fund Identifier or instrument Type), six buckets
+  (Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other), optional equity
+  style split (EquityLarge, EquityMid, EquitySmall, EquityIntl).
+- Targets columns: AssetClass, TargetPct. Used to compute deviation in
+  Economic Allocation blade.
 - NAV: AMFI primary, MFAPI fallback.
 - Metals: GoodReturns primary, then cache/manual/configured fallback.
 - Google Sheets: private Drive export first when credentials exist; public XLSX
@@ -88,6 +102,20 @@ DEPLOYMENT
 6. Verify Cloudflare Access, the custom hostname, and raw API denial.
 Terraform requires >=1.10 and uses a native S3 lockfile. Windows tests do not
 prove Ubuntu or Amazon Linux compatibility.
+
+KEY SERVICES
+- xirr.py: Pure-Python XIRR solver (Newton-Raphson + bisection) for annualized
+  returns from irregular cashflows.
+- economic_allocation.py: Maps all holdings to 6 standard asset-class buckets
+  (Equity, Debt, Govt Sec, Cash, Gold, Other) with look-through overrides and
+  hidden-equity detection.
+- excel_parser.py: Parses required sheets (MutualFunds, Retirement, Liquid, etc.)
+  and optional sheets (MFTransactions, LookThrough, Targets).
+- calculation_engine.py: Per-fund and portfolio XIRR/gain analytics from
+  transaction ledgers.
+- validators.py: MFTransactions unit reconciliation check (warns on mismatch).
+- See FEATURES_DETAILED.md for full implementation guide (algorithms,
+  edge cases, testing).
 
 SECURITY RULES
 - Production fails closed without DJANGO_SECRET_KEY, ALLOWED_HOSTS, or explicit
@@ -171,12 +199,21 @@ can reduce answer quality.
 ### Tier 1: Most Tasks
 
 Attach the **Core Prompt**, the file to change, and its closest test. Add
-`README.md` only when architecture context is needed.
+`README.md` only when architecture context is needed. For XIRR or transaction
+analytics tasks, attach `FEATURES_DETAILED.md`. For codebase structure and
+integration, attach `CODEBASE_ARCHITECTURE.md`.
 
 ### Tier 2: Application or Security
 
 - `dashboard/views.py`
-- Relevant files from `dashboard/services/`
+- Relevant files from `dashboard/services/`:
+  - `xirr.py` (XIRR solver)
+  - `economic_allocation.py` (asset allocation engine)
+  - `excel_parser.py` (sheet parsing, including MFTransactions/LookThrough/Targets)
+  - `calculation_engine.py` (per-fund and portfolio analytics)
+  - `validators.py` (MFTransactions reconciliation)
+  - `aggregator.py` (orchestration)
+  - Other services as relevant
 - `finance_dashboard/settings.py`
 - `finance_dashboard/settings_lambda.py`
 - `finance_dashboard/middleware.py`
@@ -195,9 +232,10 @@ Attach the **Core Prompt**, the file to change, and its closest test. Add
 
 ### Tier 4: Full Architecture Review
 
-Attach `README.md`, `DEPLOYMENT.md`, `OPERATIONS.md`, all workflows, `infra/`,
-Zappa configuration/patcher, Lambda settings/middleware, relevant application
-services, and tests. Use this tier only for an end-to-end audit.
+Attach `README.md`, `DEPLOYMENT.md`, `OPERATIONS.md`, `FEATURES_DETAILED.md`,
+`CODEBASE_ARCHITECTURE.md`, all workflows, `infra/`, Zappa configuration/patcher,
+Lambda settings/middleware, relevant application services, and tests. Use this
+tier only for an end-to-end audit.
 
 ## Short Task Template
 

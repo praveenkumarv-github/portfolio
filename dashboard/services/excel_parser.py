@@ -3,6 +3,7 @@ Excel Parser Service
 Handles all Excel file parsing and data validation logic
 """
 import pandas as pd
+import sys
 from typing import Dict, Any, List
 from .nav_service import get_nav_service
 from .metal_price_service import get_metal_price
@@ -51,6 +52,9 @@ class ExcelParser:
             self._parse_emergency_fund()
             self._parse_insurance()
             self._parse_metals()
+            self._parse_mf_transactions()
+            self._parse_lookthrough()
+            self._parse_targets()
 
             return {
                 'success': True,
@@ -64,6 +68,11 @@ class ExcelParser:
         except ExcelParserError:
             raise
         except Exception as e:
+            if "openpyxl" in str(e).lower():
+                raise ExcelParserError(
+                    "Error loading file: Missing optional dependency 'openpyxl' in current "
+                    f"interpreter ({sys.executable}). Install with: {sys.executable} -m pip install openpyxl"
+                ) from e
             raise ExcelParserError(f"Error loading file: {str(e)}")
         finally:
             # Explicitly close so Windows can release the file handle
@@ -100,6 +109,8 @@ class ExcelParser:
         # Clean data
         df = df.dropna(subset=['FundName', 'Identifier'])
         df['Units'] = pd.to_numeric(df['Units'], errors='coerce').fillna(0)
+        if 'Symbol' not in df.columns:
+            df['Symbol'] = ''
         
         # Convert to list of dictionaries and fetch NAV
         funds = []
@@ -109,12 +120,13 @@ class ExcelParser:
             identifier = str(row['Identifier']).strip()
             fund_name = str(row['FundName']).strip()
             units = float(row['Units'])
+            symbol = str(row.get('Symbol', '')).strip() if pd.notna(row.get('Symbol')) else ''
             fund_type = ""
             if 'Type' in df.columns and pd.notna(row.get('Type')):
                 fund_type = str(row.get('Type')).strip()
             
             # Fetch NAV
-            nav, nav_source = self.nav_service.get_nav(identifier, fund_name)
+            nav, nav_source = self.nav_service.get_nav(identifier, fund_name, symbol)
             
             if nav is None:
                 nav = 0
@@ -127,6 +139,7 @@ class ExcelParser:
             funds.append({
                 'fund_name': fund_name,
                 'identifier': identifier,
+                'symbol': symbol,
                 'fund_type': fund_type,
                 'units': float(units),
                 'nav': float(nav) if nav else 0,
@@ -348,6 +361,132 @@ class ExcelParser:
         
         self.data['metals'] = metals
         self.data['metals_total'] = float(total_value)
+
+    def _parse_mf_transactions(self):
+        """Parse optional MFTransactions sheet (SIP/lump-sum ledger per fund).
+
+        Columns: FundIdentifier, Date, Type (Invested/Redeemed), Units, NAV.
+        Amount is optional — computed as Units * NAV when not supplied.
+        Entirely optional: absence does not affect NAV/value calculations,
+        it only powers the invested-vs-current / XIRR view per fund.
+        """
+        sheet_name = 'MFTransactions'
+        self.data['mf_transactions'] = []
+
+        if sheet_name not in self.excel_file.sheet_names:
+            return
+
+        df = pd.read_excel(self.excel_file, sheet_name=sheet_name)
+        required_cols = ['FundIdentifier', 'Date', 'Type', 'Units', 'NAV']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            self.warnings.append(
+                f"{sheet_name}: Missing columns - {', '.join(missing_cols)} (transaction history skipped)"
+            )
+            return
+
+        df = df.dropna(subset=['FundIdentifier', 'Date', 'Type'])
+        df['Units'] = pd.to_numeric(df['Units'], errors='coerce').fillna(0)
+        df['NAV'] = pd.to_numeric(df['NAV'], errors='coerce').fillna(0)
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        has_amount = 'Amount' in df.columns
+        if has_amount:
+            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+
+        transactions = []
+        for _, row in df.iterrows():
+            if pd.isna(row['Date']):
+                self.warnings.append(f"{sheet_name}: Skipped row with unparsable Date")
+                continue
+            txn_type = str(row['Type']).strip().capitalize()
+            if txn_type not in ('Invested', 'Redeemed'):
+                self.warnings.append(f"{sheet_name}: Unknown Type '{row['Type']}' — must be Invested or Redeemed")
+                continue
+            units = float(row['Units'])
+            nav = float(row['NAV'])
+            amount = float(row['Amount']) if has_amount and pd.notna(row.get('Amount')) else units * nav
+
+            transactions.append({
+                'identifier': str(row['FundIdentifier']).strip(),
+                'date': row['Date'].to_pydatetime().date(),
+                'type': txn_type,
+                'units': units,
+                'nav': nav,
+                'amount': float(amount),
+            })
+
+        self.data['mf_transactions'] = transactions
+
+    def _parse_lookthrough(self):
+        """Parse optional LookThrough sheet (economic asset-class overrides).
+
+        Columns: Key (Identifier for a fund, or Type for retirement/liquid/
+        emergency-fund/metals rows), Equity, CorporateDebt, GovtSecurities,
+        Cash, Gold, Other — all percentages of that holding's value.
+        Optional style split of the Equity sleeve: EquityLarge, EquityMid,
+        EquitySmall, EquityIntl.
+        """
+        sheet_name = 'LookThrough'
+        self.data['lookthrough_overrides'] = []
+
+        if sheet_name not in self.excel_file.sheet_names:
+            return
+
+        df = pd.read_excel(self.excel_file, sheet_name=sheet_name)
+        if 'Key' not in df.columns:
+            self.warnings.append(f"{sheet_name}: Missing column - Key (overrides skipped)")
+            return
+
+        df = df.dropna(subset=['Key'])
+        bucket_cols = ['Equity', 'CorporateDebt', 'GovtSecurities', 'Cash', 'Gold', 'Other']
+        style_cols = ['EquityLarge', 'EquityMid', 'EquitySmall', 'EquityIntl']
+        for col in bucket_cols + style_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            else:
+                df[col] = 0.0
+
+        overrides = []
+        for _, row in df.iterrows():
+            overrides.append({
+                'key': str(row['Key']).strip(),
+                'equity': float(row['Equity']),
+                'corporate_debt': float(row['CorporateDebt']),
+                'govt_securities': float(row['GovtSecurities']),
+                'cash': float(row['Cash']),
+                'gold': float(row['Gold']),
+                'other': float(row['Other']),
+                'equity_large': float(row['EquityLarge']),
+                'equity_mid': float(row['EquityMid']),
+                'equity_small': float(row['EquitySmall']),
+                'equity_intl': float(row['EquityIntl']),
+            })
+
+        self.data['lookthrough_overrides'] = overrides
+
+    def _parse_targets(self):
+        """Parse optional Targets sheet (AssetClass, TargetPct) for the
+        economic allocation deviation column."""
+        sheet_name = 'Targets'
+        self.data['targets'] = {}
+
+        if sheet_name not in self.excel_file.sheet_names:
+            return
+
+        df = pd.read_excel(self.excel_file, sheet_name=sheet_name)
+        missing_cols = [c for c in ('AssetClass', 'TargetPct') if c not in df.columns]
+        if missing_cols:
+            self.warnings.append(f"{sheet_name}: Missing columns - {', '.join(missing_cols)} (targets skipped)")
+            return
+
+        df = df.dropna(subset=['AssetClass'])
+        df['TargetPct'] = pd.to_numeric(df['TargetPct'], errors='coerce').fillna(0)
+
+        targets = {}
+        for _, row in df.iterrows():
+            targets[str(row['AssetClass']).strip()] = float(row['TargetPct'])
+
+        self.data['targets'] = targets
 
 
 def parse_excel_file(file_path: str) -> Dict[str, Any]:

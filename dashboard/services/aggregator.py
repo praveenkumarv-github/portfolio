@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from ..models import NetWorthSnapshot
 from .alerts import run_alerts
 from .calculation_engine import build_portfolio
+from .economic_allocation import build_economic_allocation
 from .excel_parser import ExcelParserError, parse_excel_file
 from .validators import validate_portfolio_data
 
@@ -66,6 +67,7 @@ def _build_payload(file_path: str) -> Dict[str, Any]:
         "warnings": result.get("warnings", []),
         "snapshots": [],
         "raw_data": result.get("data", {}),
+        "economic_allocation": None,
     }
 
     if not result.get("success"):
@@ -86,6 +88,13 @@ def _build_payload(file_path: str) -> Dict[str, Any]:
         payload["alerts"] = run_alerts(data, portfolio)
     except Exception as exc:
         payload["warnings"].append(f"Alerts engine failed: {exc}")
+
+    try:
+        economic_allocation = build_economic_allocation(data, portfolio)
+        payload["economic_allocation"] = economic_allocation
+        payload["warnings"].extend(economic_allocation.get("unclassified_notes", []))
+    except Exception as exc:
+        payload["warnings"].append(f"Economic allocation engine failed: {exc}")
 
     try:
         _capture_snapshot(portfolio)

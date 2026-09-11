@@ -46,8 +46,12 @@ def _resolve_cache_path() -> str:
 
 
 _NAV_CACHE   = _resolve_cache_path()
-_AMFI_URL    = "https://www.amfiindia.com/spages/NAVAll.txt"
+_AMFI_URLS   = [
+    "https://portal.amfiindia.com/spages/NAVAll.txt",
+    "https://www.amfiindia.com/spages/NAVAll.txt",
+]
 _MFAPI_URL   = "https://api.mfapi.in/mf/{}"
+_TV_SCAN_URL = "https://scanner.tradingview.com/india/scan"
 _CACHE_TTL_H = 24   # hours
 
 # In-memory fallback when file I/O is unavailable
@@ -108,12 +112,38 @@ def _cache_valid(entry: Dict) -> bool:
 # VALIDATION
 # =============================================================================
 
-def _validate_nav(nav: float) -> bool:
+def _validate_nav(nav: float, log_invalid: bool = True) -> bool:
     """NAV must be positive and below 10 000."""
     ok = 0 < nav < 10_000
-    if not ok:
+    if not ok and log_invalid:
         logger.warning("[NAVService] NAV %.4f failed validation (must be 0 < nav < 10000)", nav)
     return ok
+
+
+def _normalize_identifier(identifier: str) -> str:
+    """
+    Normalize fund identifiers to improve lookup hit rate.
+
+    Examples:
+      * " 120716.0 " -> "120716"
+      * "120,716"    -> "120716"
+      * "inf209k01vn8" -> "INF209K01VN8"
+    """
+    raw = str(identifier).strip().replace(",", "")
+
+    # Convert float-like numeric Excel values to canonical integer scheme codes.
+    m = re.fullmatch(r"(\d+)\.0+", raw)
+    if m:
+        return m.group(1)
+
+    if re.fullmatch(r"\d+", raw):
+        return raw
+
+    return raw.upper()
+
+
+def _normalize_symbol(symbol: str) -> str:
+    return str(symbol).strip().upper()
 
 
 # =============================================================================
@@ -124,8 +154,9 @@ def _parse_amfi_text(text: str) -> Dict[str, Dict]:
     """
     Parse NAVAll.txt into a lookup dict keyed by both ISINs and Scheme Code.
 
-    File format (semicolon-separated):
-      SchemeCode;ISINDivPayout;ISINDivReinvest;SchemeName;NAV;Date
+        File format (semicolon-separated):
+            Legacy: SchemeCode;ISINDivPayout;ISINDivReinvest;SchemeName;NAV;Date
+            Current: SchemeCode;ISIN1;ISIN2;SchemeName;Plan;Option;NAV;Date
 
     Returns:
       {
@@ -151,15 +182,18 @@ def _parse_amfi_text(text: str) -> Dict[str, Dict]:
         isin1       = parts[1].strip()
         isin2       = parts[2].strip()
         scheme_name = parts[3].strip()
-        nav_raw     = parts[4].strip()
-        nav_date    = parts[5].strip()
+
+        # AMFI added Plan/Option columns in newer dumps; NAV and Date stay at tail.
+        nav_raw = parts[-2].strip()
+        nav_date = parts[-1].strip()
 
         try:
             nav = float(nav_raw)
         except ValueError:
             continue
 
-        if not _validate_nav(nav):
+        # AMFI dumps can contain rows with non-portfolio values; skip silently.
+        if not _validate_nav(nav, log_invalid=False):
             continue
 
         record = {
@@ -171,7 +205,7 @@ def _parse_amfi_text(text: str) -> Dict[str, Dict]:
 
         for key in [isin1, isin2, scheme_code]:
             if key and key not in ("-", "N/A", ""):
-                index[key.upper()] = record
+                index[_normalize_identifier(key)] = record
 
     logger.info("[NAVService] parsed %d NAV records from AMFI text", len(index))
     return index
@@ -179,18 +213,20 @@ def _parse_amfi_text(text: str) -> Dict[str, Dict]:
 
 def _fetch_amfi_index() -> Optional[Dict[str, Dict]]:
     """Download NAVAll.txt and return parsed index, or None on failure."""
-    try:
-        import requests as req
-        resp = req.get(_AMFI_URL, headers=_HEADERS, timeout=3)
-        resp.raise_for_status()
-        # AMFI file is latin-1 encoded
-        text = resp.content.decode("latin-1")
-        idx  = _parse_amfi_text(text)
-        if idx:
-            return idx
-        logger.warning("[NAVService] AMFI response parsed but yielded 0 records")
-    except Exception as exc:
-        logger.warning("[NAVService] AMFI fetch failed: %s", exc)
+    import requests as req
+
+    for url in _AMFI_URLS:
+        try:
+            resp = req.get(url, headers=_HEADERS, timeout=5)
+            resp.raise_for_status()
+            # AMFI file is latin-1 encoded
+            text = resp.content.decode("latin-1")
+            idx = _parse_amfi_text(text)
+            if idx:
+                return idx
+            logger.warning("[NAVService] AMFI response parsed but yielded 0 records: %s", url)
+        except Exception as exc:
+            logger.warning("[NAVService] AMFI fetch failed for %s: %s", url, exc)
     return None
 
 
@@ -204,11 +240,12 @@ def _fetch_mfapi(code: str) -> Optional[Tuple[float, str, str]]:
     Returns (nav, date, scheme_name) or None.
     """
     # Only attempt with numeric codes
-    if not re.fullmatch(r"\d+", code.strip()):
+    normalized = _normalize_identifier(code)
+    if not re.fullmatch(r"\d+", normalized):
         return None
     try:
         import requests as req
-        resp = req.get(_MFAPI_URL.format(code.strip()), headers=_HEADERS, timeout=3)
+        resp = req.get(_MFAPI_URL.format(normalized), headers=_HEADERS, timeout=3)
         if resp.status_code != 200:
             return None
         data = resp.json()
@@ -222,7 +259,47 @@ def _fetch_mfapi(code: str) -> Optional[Tuple[float, str, str]]:
         if _validate_nav(nav):
             return nav, nav_date, name
     except Exception as exc:
-        logger.warning("[NAVService] MFAPI failed for %s: %s", code, exc)
+        logger.warning("[NAVService] MFAPI failed for %s: %s", normalized, exc)
+    return None
+
+
+def _fetch_symbol_nav(symbol: str) -> Optional[Tuple[float, str]]:
+    """
+    Fallback: fetch NAV using a TradingView mutual-fund symbol.
+    Returns (nav, normalized_symbol) or None.
+    """
+    normalized = _normalize_symbol(symbol)
+    if not normalized:
+        return None
+
+    payload = {
+        "symbols": {"tickers": [normalized], "query": {"types": []}},
+        "columns": ["close", "last_price"],
+    }
+
+    try:
+        import requests as req
+
+        resp = req.post(_TV_SCAN_URL, json=payload, headers=_HEADERS, timeout=5)
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        rows = data.get("data", [])
+        if not rows:
+            return None
+
+        values = rows[0].get("d", [])
+        for value in values:
+            try:
+                nav = float(value)
+            except (TypeError, ValueError):
+                continue
+            if _validate_nav(nav):
+                return nav, normalized
+    except Exception as exc:
+        logger.warning("[NAVService] Symbol fallback failed for %s: %s", normalized, exc)
+
     return None
 
 
@@ -252,7 +329,7 @@ def _get_amfi_index(force: bool = False) -> Optional[Dict[str, Dict]]:
     return _amfi_index
 
 
-def get_nav(identifier: str, fund_name: str = "") -> Tuple[float, str]:
+def get_nav(identifier: str, fund_name: str = "", symbol: str = "") -> Tuple[float, str]:
     """
     Return (nav, source_label) for the given fund identifier.
 
@@ -267,7 +344,7 @@ def get_nav(identifier: str, fund_name: str = "") -> Tuple[float, str]:
 
     Returns (0.0, error_string) when no price can be determined.
     """
-    key = identifier.strip().upper()
+    key = _normalize_identifier(identifier)
     cache = _read_cache()
 
     # Layer 1: valid cache entry
@@ -307,7 +384,28 @@ def get_nav(identifier: str, fund_name: str = "") -> Tuple[float, str]:
         _write_cache(cache)
         return nav, f"MFAPI ({nav_date})"
 
-    # Layer 4: stale cache
+    # Layer 4: Symbol fallback
+    symbol_key = _normalize_symbol(symbol)
+    sym = _fetch_symbol_nav(symbol_key) if symbol_key else None
+    if sym:
+        nav, used_symbol = sym
+        today = datetime.now().strftime("%d-%b-%Y")
+        logger.info(
+            "[NAVService][SYMBOL] %s -> %s NAV=%.4f symbol=%s",
+            key, fund_name or "unknown", nav, used_symbol,
+        )
+        cache[key] = {
+            "nav": nav,
+            "date": today,
+            "scheme_name": fund_name or used_symbol,
+            "timestamp": _now_iso(),
+        }
+        # Also cache by symbol for repeat lookups using the same symbol.
+        cache[used_symbol] = dict(cache[key])
+        _write_cache(cache)
+        return nav, f"Symbol ({used_symbol})"
+
+    # Layer 5: stale cache
     if key in cache:
         entry = cache[key]
         nav   = float(entry.get("nav", 0))
@@ -318,7 +416,12 @@ def get_nav(identifier: str, fund_name: str = "") -> Tuple[float, str]:
             )
             return nav, f"Cached-offline ({entry.get('date', '?')})"
 
-    logger.error("[NAVService] no NAV found for identifier=%s fund=%s", key, fund_name)
+    logger.error(
+        "[NAVService] no NAV found for identifier=%s fund=%s symbol=%s",
+        key,
+        fund_name,
+        symbol_key,
+    )
     return 0.0, "Not Available"
 
 
@@ -333,6 +436,6 @@ def get_nav_service():
 class _NAVServiceAdapter:
     """Adapter that exposes the old NAVService.get_nav() interface."""
 
-    def get_nav(self, identifier: str, fund_name: str = "") -> Tuple[Optional[float], str]:
-        nav, src = get_nav(identifier, fund_name)
+    def get_nav(self, identifier: str, fund_name: str = "", symbol: str = "") -> Tuple[Optional[float], str]:
+        nav, src = get_nav(identifier, fund_name, symbol)
         return (nav if nav > 0 else None), src

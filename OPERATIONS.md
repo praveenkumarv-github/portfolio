@@ -31,6 +31,44 @@ External/manual resources include the pre-existing Terraform state bucket, domai
 
 Portfolio formulas, Excel schema semantics, and alert rules are independent of authentication and deployment configuration.
 
+## Transaction Analytics and XIRR
+
+The MFTransactions sheet (optional) enables per-fund and portfolio-level transaction analytics:
+
+- **XIRR Solver** (`dashboard/services/xirr.py`): pure-Python Newton-Raphson with bisection fallback. No external dependency.
+- **Per-fund analytics** (`calculation_engine._fund_transaction_analytics`): invested amount, redeemed amount, net invested, absolute gain, absolute return %, first investment date, transaction list.
+- **Portfolio-level analytics** (`calculation_engine._portfolio_mf_analytics`): pools XIRR and gain across only the funds that have a recorded transaction ledger. Funds without a ledger do not inflate pooled gain.
+- **Data quality check** (`validators.validate_portfolio_data`): warns if a fund's MFTransactions net units (Invested - Redeemed) do not reconcile within ±0.5% of its declared Units. This catches incomplete or mismatched ledgers.
+
+MFTransactions columns: `FundIdentifier`, `Date`, `Type` (Invested/Redeemed, case-insensitive), `Units`, `NAV`. Amount is auto-computed as `Units × NAV` if not supplied. Invalid transaction types are skipped with a warning.
+
+## Economic Asset Allocation (Look-Through)
+
+The economic allocation engine (`dashboard/services/economic_allocation.py`) answers "what do I actually own economically?" by mapping every holding to six standard buckets:
+
+- **Equity, Corporate Debt, Government Securities, Cash, Gold, Other**
+
+Classification priority:
+1. Explicit override from the LookThrough sheet (keyed by fund Identifier or instrument Type).
+2. Conservative, documented defaults for well-known product types:
+   - Equity Fund → 100% Equity
+   - Debt Fund → 100% Corporate Debt
+   - Gilt Fund → 100% Government Securities
+   - Hybrid Fund → 60% Equity / 40% Corporate Debt
+   - Arbitrage Fund → 20% Equity / 80% Cash
+   - EPF → 85% Govt Securities / 15% Equity (per EPFO published mix)
+   - PPF → 100% Govt Securities
+   - Cash-like (FD, Savings, RD) → 100% Cash
+3. Other/Unclassified: NPS and custom schemes without an override fall here by design (never guessed).
+
+**Equity Style Split** (optional, from LookThrough): Large Cap, Mid Cap, Small Cap, International; otherwise unclassified.
+
+**Hidden Equity Detection**: compares effective equity % (look-through) to naive equity % (Equity/Debt/Hybrid labels). Funds with hidden exposure (e.g., EPF's 15% equity, arbitrage's 20%) can silently increase actual portfolio risk.
+
+**Target Deviations**: optional Targets sheet (AssetClass, TargetPct) computes Current % vs Target % vs Deviation for each bucket. Zero-target buckets are omitted.
+
+LookThrough columns: `Key` (fund Identifier or Type), `Equity`, `CorporateDebt`, `GovtSecurities`, `Cash`, `Gold`, `Other`, optional `EquityLarge`, `EquityMid`, `EquitySmall`, `EquityIntl` (all as %); percentages are normalized to 100.
+
 ## Data durability
 
 | Data | Local | Lambda |

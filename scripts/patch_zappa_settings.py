@@ -53,6 +53,7 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
         runtime="python3.11",
         slim_handler=True,
         use_precompiled_packages=False,
+        log_level="WARNING",
         ephemeral_storage={"Size": 3072},
         # API Gateway REST caps at 29 s; keep Lambda timeout aligned.
         timeout_seconds=30,
