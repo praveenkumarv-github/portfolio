@@ -44,7 +44,9 @@ class TestDashboardUI:
             body = resp.content.decode("utf-8")
             assert resp.status_code == 200
             assert "id=\"allocChart\"" in body
-            assert "id=\"cmpChart\"" in body
+            assert "Portfolio Distribution" in body
+            assert 'class="portfolio-blocks"' in body
+            assert "pb-track" in body
             assert "id=\"trendChart\"" in body
             assert "id=\"mfBladeChart\"" in body
             assert "id=\"blade-retirement\"" in body
