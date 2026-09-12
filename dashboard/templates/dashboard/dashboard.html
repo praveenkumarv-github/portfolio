@@ -357,6 +357,19 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
   .brand{font-size:20px}
   .meta{font-size:10px}
   .aurora .orb{filter:blur(50px)}
+
+  /* Compact mobile view: tables become label:value cards instead of
+     cramped/scrolling grids. Economic Allocation keeps its own grid layout. */
+  table.tbl:not(.ea-table){min-width:0;width:100%;display:block}
+  table.tbl:not(.ea-table) thead{display:none}
+  table.tbl:not(.ea-table) tbody,table.tbl:not(.ea-table) tfoot{display:block}
+  table.tbl:not(.ea-table) tr{display:block;border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--panel)}
+  table.tbl:not(.ea-table) tfoot tr{background:var(--panel-alt)}
+  table.tbl:not(.ea-table) tr:last-child{margin-bottom:0}
+  table.tbl:not(.ea-table) td{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line2);text-align:right}
+  table.tbl:not(.ea-table) td:last-child{border-bottom:none}
+  table.tbl:not(.ea-table) td:first-child{display:block;text-align:left;font-weight:700;font-size:12px;border-bottom:1px solid var(--line2);padding:0 0 8px;margin-bottom:4px}
+  table.tbl:not(.ea-table) td[data-label]::before{content:attr(data-label);font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 }
 
 @media(max-width:480px){
@@ -655,35 +668,36 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
       <thead><tr><th scope="col">Fund</th><th scope="col" class="r">Units</th><th scope="col" class="r">NAV</th><th scope="col" class="r">Avg. Cost</th><th scope="col" class="r">Value</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Gain</th><th scope="col" class="r">XIRR</th><th scope="col" class="r">CAGR</th><th scope="col" class="r">%</th></tr></thead>
       <tbody>
       {% for f in portfolio.mutual_funds %}
+      <tr>
         <td>{{ f.fund_name }}<div class="sub">{{ f.identifier }} | {{ f.nav_source }}</div></td>
-        <td class="r">{{ f.units|floatformat:2 }}</td>
-        <td class="r">₹{{ f.nav|floatformat:2 }}</td>
-        <td class="r">{% if f.avg_cost_nav is not None %}₹{{ f.avg_cost_nav|floatformat:2 }}{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="r">₹{{ f.current_value|floatformat:0 }}</td>
-        <td class="r">{% if f.transactions %}₹{{ f.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="r">{% if f.absolute_return_pct is not None %}<span class="{% if f.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ f.absolute_gain|floatformat:0 }} ({{ f.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="r">{% if f.xirr_pct is not None %}<span class="{% if f.xirr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.xirr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="r">{% if f.cagr_pct is not None %}<span class="{% if f.cagr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.cagr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-        <td class="r">{{ f.pct|floatformat:1 }}%</td>
+        <td class="r" data-label="Units">{{ f.units|floatformat:2 }}</td>
+        <td class="r" data-label="NAV">₹{{ f.nav|floatformat:2 }}</td>
+        <td class="r" data-label="Avg. Cost">{% if f.avg_cost_nav is not None %}₹{{ f.avg_cost_nav|floatformat:2 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r" data-label="Value">₹{{ f.current_value|floatformat:0 }}</td>
+        <td class="r" data-label="Invested">{% if f.transactions %}₹{{ f.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r" data-label="Gain">{% if f.absolute_return_pct is not None %}<span class="{% if f.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ f.absolute_gain|floatformat:0 }} ({{ f.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r" data-label="XIRR">{% if f.xirr_pct is not None %}<span class="{% if f.xirr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.xirr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r" data-label="CAGR">{% if f.cagr_pct is not None %}<span class="{% if f.cagr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.cagr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r" data-label="% of MF">{{ f.pct|floatformat:1 }}%</td>
       </tr>
       {% endfor %}
       </tbody>
-      <tfoot><tr><td colspan="5">Total</td><td class="r">{% if portfolio.mf_analytics.has_transactions %}₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.absolute_return_pct is not None %}<span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">—</td><td class="r">100.0%</td></tr></tfoot>
+      <tfoot><tr><td colspan="5">Total</td><td class="r" data-label="Invested">{% if portfolio.mf_analytics.has_transactions %}₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td><td class="r" data-label="Gain">{% if portfolio.mf_analytics.absolute_return_pct is not None %}<span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td><td class="r" data-label="XIRR">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}<span class="muted">–</span>{% endif %}</td><td class="r" data-label="CAGR">—</td><td class="r" data-label="% of MF">100.0%</td></tr></tfoot>
     </table>
-      <div style="margin-top:8px;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><table class="tbl"><thead><tr><th>Type</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for s in portfolio.mf_split %}<tr><td>{{ s.type }}</td><td class="r">₹{{ s.value|floatformat:0 }}</td><td class="r">{{ s.pct|floatformat:1 }}</td></tr>{% endfor %}</tbody></table></div>
+      <div style="margin-top:8px;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><table class="tbl"><thead><tr><th>Type</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for s in portfolio.mf_split %}<tr><td>{{ s.type }}</td><td class="r" data-label="Value">₹{{ s.value|floatformat:0 }}</td><td class="r" data-label="%">{{ s.pct|floatformat:1 }}</td></tr>{% endfor %}</tbody></table></div>
       </div></div></div></div>
 
-    <div class="blade reveal" id="blade-retirement"><div class="blade-head" onclick="toggleBlade('blade-retirement')"><span>RT</span><span class="blade-name">Retirement</span><span class="blade-val">₹{{ portfolio.retirement_total|floatformat:0 }}</span><span class="chev" id="chev-blade-retirement">▼</span></div><div class="blade-body" id="body-blade-retirement"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="retBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.retirement %}<tr><td>{{ x.type }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td>Total</td><td class="r">₹{{ portfolio.retirement_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
+    <div class="blade reveal" id="blade-retirement"><div class="blade-head" onclick="toggleBlade('blade-retirement')"><span>RT</span><span class="blade-name">Retirement</span><span class="blade-val">₹{{ portfolio.retirement_total|floatformat:0 }}</span><span class="chev" id="chev-blade-retirement">▼</span></div><div class="blade-body" id="body-blade-retirement"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="retBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.retirement %}<tr><td>{{ x.type }}</td><td class="r" data-label="Amount">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td>Total</td><td class="r" data-label="Amount">₹{{ portfolio.retirement_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
 
-    <div class="blade reveal" id="blade-liquid"><div class="blade-head" onclick="toggleBlade('blade-liquid')"><span>LQ</span><span class="blade-name">Liquid</span><span class="blade-val">₹{{ portfolio.liquid_total|floatformat:0 }}</span><span class="chev" id="chev-blade-liquid">▼</span></div><div class="blade-body" id="body-blade-liquid"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Account Split</div><div class="blade-chart"><canvas id="liqBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.liquid %}<tr><td>{{ x.account_name }}</td><td>{{ x.type }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r">₹{{ portfolio.liquid_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
+    <div class="blade reveal" id="blade-liquid"><div class="blade-head" onclick="toggleBlade('blade-liquid')"><span>LQ</span><span class="blade-name">Liquid</span><span class="blade-val">₹{{ portfolio.liquid_total|floatformat:0 }}</span><span class="chev" id="chev-blade-liquid">▼</span></div><div class="blade-body" id="body-blade-liquid"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Account Split</div><div class="blade-chart"><canvas id="liqBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.liquid %}<tr><td>{{ x.account_name }}</td><td data-label="Type">{{ x.type }}</td><td class="r" data-label="Amount">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="2">Total</td><td class="r" data-label="Amount">₹{{ portfolio.liquid_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
 
-    <div class="blade reveal" id="blade-emergency_fund"><div class="blade-head" onclick="toggleBlade('blade-emergency_fund')"><span>EF</span><span class="blade-name">Emergency Fund</span><span class="blade-val">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</span><span class="chev" id="chev-blade-emergency_fund">▼</span></div><div class="blade-body" id="body-blade-emergency_fund"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="efBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th>Maturity</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.emergency_fund %}<tr><td>{{ x.account_name }}</td><td>{{ x.type }}</td><td>{{ x.maturity_date|default:'-' }}</td><td class="r">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
+    <div class="blade reveal" id="blade-emergency_fund"><div class="blade-head" onclick="toggleBlade('blade-emergency_fund')"><span>EF</span><span class="blade-name">Emergency Fund</span><span class="blade-val">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</span><span class="chev" id="chev-blade-emergency_fund">▼</span></div><div class="blade-body" id="body-blade-emergency_fund"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Type Split</div><div class="blade-chart"><canvas id="efBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Account</th><th>Type</th><th>Maturity</th><th class="r">Amount</th></tr></thead><tbody>{% for x in portfolio.emergency_fund %}<tr><td>{{ x.account_name }}</td><td data-label="Type">{{ x.type }}</td><td data-label="Maturity">{{ x.maturity_date|default:'-' }}</td><td class="r" data-label="Amount">₹{{ x.amount|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r" data-label="Amount">₹{{ portfolio.emergency_fund_total|floatformat:0 }}</td></tr></tfoot></table></div></div></div></div>
 
-    <div class="blade reveal" id="blade-metals"><div class="blade-head" onclick="toggleBlade('blade-metals')"><span>MT</span><span class="blade-name">Metals</span><span class="blade-val">₹{{ portfolio.metals_total|floatformat:0 }}</span><span class="chev" id="chev-blade-metals">▼</span></div><div class="blade-body" id="body-blade-metals"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Gold vs Silver</div><div class="blade-chart"><canvas id="metBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Qty</th><th class="r">Price/g</th><th class="r">Value</th></tr></thead><tbody>{% for x in portfolio.metals %}<tr><td>{{ x.type }}<div class="sub">{{ x.price_source }}</div></td><td class="r">{{ x.quantity|floatformat:2 }}</td><td class="r">₹{{ x.price_per_gram|floatformat:0 }}</td><td class="r">₹{{ x.value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r">₹{{ portfolio.metals_total|floatformat:0 }}</td></tr></tfoot></table>
+    <div class="blade reveal" id="blade-metals"><div class="blade-head" onclick="toggleBlade('blade-metals')"><span>MT</span><span class="blade-name">Metals</span><span class="blade-val">₹{{ portfolio.metals_total|floatformat:0 }}</span><span class="chev" id="chev-blade-metals">▼</span></div><div class="blade-body" id="body-blade-metals"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Gold vs Silver</div><div class="blade-chart"><canvas id="metBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Qty</th><th class="r">Price/g</th><th class="r">Value</th></tr></thead><tbody>{% for x in portfolio.metals %}<tr><td>{{ x.type }}<div class="sub">{{ x.price_source }}</div></td><td class="r" data-label="Qty">{{ x.quantity|floatformat:2 }}</td><td class="r" data-label="Price/g">₹{{ x.price_per_gram|floatformat:0 }}</td><td class="r" data-label="Value">₹{{ x.value|floatformat:0 }}</td></tr>{% endfor %}</tbody><tfoot><tr><td colspan="3">Total</td><td class="r" data-label="Value">₹{{ portfolio.metals_total|floatformat:0 }}</td></tr></tfoot></table>
       <form method="post" action="{% url 'update_metal_prices' %}" class="metal-form">{% csrf_token %}<input type="number" name="gold_price" placeholder="Gold /g" step="1" min="1001"><input type="number" name="silver_price" placeholder="Silver /g" step="0.5" min="11"><button type="submit" class="btn">Set Manual</button></form><form method="post" action="{% url 'update_metal_prices' %}" class="metal-form-auto">{% csrf_token %}<input type="hidden" name="action" value="refresh"><button type="submit" class="btn">Auto Fetch</button></form>
       </div></div></div></div>
 
-    <div class="blade reveal" id="blade-risk"><div class="blade-head" onclick="toggleBlade('blade-risk')"><span>RM</span><span class="blade-name">Risk Management</span><span class="blade-val">₹{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span><span class="chev" id="chev-blade-risk">▼</span></div><div class="blade-body" id="body-blade-risk"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Coverage Mix</div><div class="blade-chart"><canvas id="riskBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Coverage</th><th class="r">Premium</th><th class="r">Status</th></tr></thead><tbody>{% for x in portfolio.risk_rows %}<tr><td>{{ x.type }}</td><td class="r">₹{{ x.coverage|floatformat:0 }}</td><td class="r">₹{{ x.premium|floatformat:0 }}</td><td class="r"><span class="badge {{ x.status_level }}">{{ x.status }}</span></td></tr>{% endfor %}</tbody></table></div></div></div></div>
+    <div class="blade reveal" id="blade-risk"><div class="blade-head" onclick="toggleBlade('blade-risk')"><span>RM</span><span class="blade-name">Risk Management</span><span class="blade-val">₹{{ portfolio.risk_summary.total_coverage|floatformat:0 }}</span><span class="chev" id="chev-blade-risk">▼</span></div><div class="blade-body" id="body-blade-risk"><div class="blade-layout"><div class="side"><div class="mini-panel"><div class="mini-title">Coverage Mix</div><div class="blade-chart"><canvas id="riskBladeChart" width="220" height="170"></canvas></div></div></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Coverage</th><th class="r">Premium</th><th class="r">Status</th></tr></thead><tbody>{% for x in portfolio.risk_rows %}<tr><td>{{ x.type }}</td><td class="r" data-label="Coverage">₹{{ x.coverage|floatformat:0 }}</td><td class="r" data-label="Premium">₹{{ x.premium|floatformat:0 }}</td><td class="r" data-label="Status"><span class="badge {{ x.status_level }}">{{ x.status }}</span></td></tr>{% endfor %}</tbody></table></div></div></div></div>
 
     {% if economic_allocation %}
     <div class="blade reveal" id="blade-economic"><div class="blade-head" onclick="toggleBlade('blade-economic')"><span>EA</span><span class="blade-name">Economic Allocation (Look-Through)</span><span class="blade-val">{{ economic_allocation.effective_equity_pct|floatformat:1 }}% Equity</span><span class="chev" id="chev-blade-economic">▼</span></div><div class="blade-body" id="body-blade-economic"><div class="blade-layout"><div class="side"><div class="stack">
@@ -735,7 +749,7 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
           <table class="tbl"><thead><tr><th scope="col">Equity Style</th><th scope="col" class="r">Value</th><th scope="col" class="r">% of Equity</th></tr></thead>
           <tbody>
           {% for s in economic_allocation.equity_style %}
-          <tr><td>{{ s.label }}</td><td class="r">₹{{ s.value|floatformat:0 }}</td><td class="r">{{ s.pct|floatformat:1 }}%</td></tr>
+          <tr><td>{{ s.label }}</td><td class="r" data-label="Value">₹{{ s.value|floatformat:0 }}</td><td class="r" data-label="% of Equity">{{ s.pct|floatformat:1 }}%</td></tr>
           {% endfor %}
           </tbody></table>
         </div>
@@ -766,11 +780,11 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
           {% for s in portfolio.mf_purchase_summary %}
           <tr class="lot-summary-row" data-fund="{{ s.fund_name|lower }}">
             <td>{{ s.fund_name }}</td>
-            <td class="r">{{ s.purchase_count }}</td>
-            <td class="r">{{ s.units|floatformat:2 }}</td>
-            <td class="r">₹{{ s.invested_amount|floatformat:0 }}</td>
-            <td class="r">₹{{ s.current_value|floatformat:0 }}</td>
-            <td class="r"><span class="{% if s.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ s.gain|floatformat:0 }}{% if s.gain_pct is not None %} ({{ s.gain_pct|floatformat:1 }}%){% endif %}</span></td>
+            <td class="r" data-label="Purchases">{{ s.purchase_count }}</td>
+            <td class="r" data-label="Units">{{ s.units|floatformat:2 }}</td>
+            <td class="r" data-label="Invested">₹{{ s.invested_amount|floatformat:0 }}</td>
+            <td class="r" data-label="Current Value">₹{{ s.current_value|floatformat:0 }}</td>
+            <td class="r" data-label="Gain"><span class="{% if s.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ s.gain|floatformat:0 }}{% if s.gain_pct is not None %} ({{ s.gain_pct|floatformat:1 }}%){% endif %}</span></td>
           </tr>
           {% endfor %}
           </tbody>
@@ -790,14 +804,14 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
           {% for l in portfolio.mf_purchase_lots %}
           <tr class="lot-row" data-fund="{{ l.fund_name|lower }}">
             <td>{{ l.date|date:"d M Y" }}</td>
-            <td>{{ l.fund_name }}</td>
-            <td class="r">{{ l.units|floatformat:2 }}</td>
-            <td class="r">₹{{ l.purchase_nav|floatformat:2 }}</td>
-            <td class="r">₹{{ l.invested_amount|floatformat:0 }}</td>
-            <td class="r">₹{{ l.current_nav|floatformat:2 }}</td>
-            <td class="r">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
-            <td class="r">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-            <td>{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td data-label="Fund">{{ l.fund_name }}</td>
+            <td class="r" data-label="Units">{{ l.units|floatformat:2 }}</td>
+            <td class="r" data-label="Purchase NAV">₹{{ l.purchase_nav|floatformat:2 }}</td>
+            <td class="r" data-label="Invested">₹{{ l.invested_amount|floatformat:0 }}</td>
+            <td class="r" data-label="Current NAV">₹{{ l.current_nav|floatformat:2 }}</td>
+            <td class="r" data-label="Current Value">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td class="r" data-label="Gain">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td data-label="Holding">{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
           </tr>
           {% endfor %}
           </tbody>
@@ -818,12 +832,12 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
               {% for l in g.lots %}
               <tr>
                 <td>{{ l.date|date:"d M Y" }}</td>
-                <td class="r">{{ l.units|floatformat:2 }}</td>
-                <td class="r">₹{{ l.purchase_nav|floatformat:2 }}</td>
-                <td class="r">₹{{ l.invested_amount|floatformat:0 }}</td>
-                <td class="r">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
-                <td class="r">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
-                <td>{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+                <td class="r" data-label="Units">{{ l.units|floatformat:2 }}</td>
+                <td class="r" data-label="Purchase NAV">₹{{ l.purchase_nav|floatformat:2 }}</td>
+                <td class="r" data-label="Invested">₹{{ l.invested_amount|floatformat:0 }}</td>
+                <td class="r" data-label="Current Value">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+                <td class="r" data-label="Gain">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+                <td data-label="Holding">{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
               </tr>
               {% endfor %}
               </tbody>
