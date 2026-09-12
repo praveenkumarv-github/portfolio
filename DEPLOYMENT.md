@@ -31,11 +31,11 @@ Three optional sheets enable advanced analytics:
 
 | Sheet | Columns | Purpose |
 |-------|---------|---------|
-| **MFTransactions** (optional) | FundIdentifier, Date, Type, Units, NAV | SIP/lump-sum ledger; drives XIRR and gain analysis |
+| **MFTransactions** (optional) | Scheme Name, Transaction Type, Units, NAV, Amount, Date | SIP/lump-sum ledger; drives XIRR and gain analysis |
 | **LookThrough** (optional) | Key, Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other, [EquityLarge, EquityMid, EquitySmall, EquityIntl] | Economic look-through overrides per fund or instrument |
 | **Targets** (optional) | AssetClass, TargetPct | Target allocation percentages for deviation analysis |
 
-- MFTransactions: `Type` accepts Invested/Redeemed (case-insensitive). `Amount` is auto-computed as `Units × NAV` if not supplied. Invalid types are skipped with a warning.
+- MFTransactions: `Scheme Name` is matched to `MutualFunds.FundName` and its Identifier is used internally. `Transaction Type` accepts PURCHASE/REDEEM (case-insensitive) and is normalized to Invested/Redeemed. `Amount` is optional and auto-computed as `Units × NAV` if not supplied. Unmatched/ambiguous scheme names and invalid transaction types are skipped with a warning. Legacy `FundIdentifier` + `Type` columns remain supported.
 - LookThrough: `Key` is the fund Identifier (mutual funds) or Type (retirement/liquid/EF/metals). Percentages in buckets should sum to 100; they are normalized by the parser. Equity style columns are optional and used only when supplied.
 - Targets: `AssetClass` is matched case-insensitively to bucket labels (Equity, Gold, etc.). Percentages are the target allocations; deviations show actual % minus target %.
 

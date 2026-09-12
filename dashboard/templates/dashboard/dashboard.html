@@ -220,6 +220,9 @@ input[type=url]{width:360px;max-width:100%}
 details[open]>.ea-summary .ea-label::before{content:'▾ '}
 .ea-row{border-bottom:1px solid var(--line2)}
 .ea-contrib{margin:0 16px 12px;width:calc(100% - 32px);border:1px solid var(--line2);border-radius:8px;overflow:hidden}
+.ea-table thead tr{display:grid;grid-template-columns:1.6fr .9fr .7fr .7fr .9fr;gap:10px;align-items:center}
+.ea-table thead th{padding:10px 16px;text-align:left}
+.ea-table thead th.r{text-align:right}
 
 .dump-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap}
 .dump-head .dump-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -253,7 +256,8 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
 .mini-panel .mini-title{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px}
 .blade-chart{display:flex;justify-content:center;align-items:center;width:100%;max-width:260px;aspect-ratio:1/1;margin:0 auto;padding:6px}
 .blade-chart canvas{width:100%!important;height:100%!important}
-.tblwrap{padding:16px}
+.tblwrap{padding:16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wide-tbl{min-width:640px}
 .tbl{width:100%;border-collapse:collapse}
 .tbl th{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.9px;text-align:left;padding:10px 10px 12px;border-bottom:2px solid var(--line2);background:var(--panel-alt)}
 .tbl td{padding:10px;border-bottom:1px solid var(--line2);font-size:12px;transition:background .15s ease}
@@ -274,10 +278,21 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
 .txn-row summary::-webkit-details-marker{display:none}
 .txn-row summary::before{content:'▸ ';display:inline-block}
 .txn-row details[open] summary::before{content:'▾ '}
-.txn-table{margin-top:8px;font-size:11px}
+.txn-table{margin-top:8px;font-size:11px;min-width:520px}
 .txn-table th{font-size:9px;padding:6px 8px}
 .txn-table td{padding:6px 8px;font-size:11px}
 .sub{font-size:10px;color:var(--muted);margin-top:2px;opacity:.8}
+.lot-filter-input{width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:inherit;font-size:13px}
+.lot-filter-select{padding:8px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:inherit;font-size:13px}
+.lot-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.lot-view-toggle{display:flex;gap:6px}
+.lot-view-toggle button{padding:7px 14px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s ease}
+.lot-view-toggle button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.lot-group{border:1px solid var(--line2);border-radius:8px;margin-bottom:10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.lot-group summary{display:grid;grid-template-columns:1.6fr .8fr .9fr .9fr .9fr;gap:10px;align-items:center;padding:10px 16px;cursor:pointer;font-size:12px;font-weight:600;list-style:none;background:var(--panel-alt)}
+.lot-group summary::-webkit-details-marker{display:none}
+.lot-group summary::before{content:'▸ ';color:var(--muted2);font-weight:400}
+.lot-group[open] summary::before{content:'▾ '}
 .note{font-size:10px;color:var(--muted);margin-top:8px;opacity:.8}
 .empty{background:var(--panel-glass);backdrop-filter:blur(12px);border:2px dashed var(--line);border-radius:18px;padding:64px 20px;text-align:center;color:var(--muted);font-size:14px;box-shadow:var(--shadow);animation:scaleIn .4s ease-out}
 
@@ -636,35 +651,24 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
   </section>
 
   <section class="blades">
-    <div class="blade reveal" id="blade-mutual_funds"><div class="blade-head" onclick="toggleBlade('blade-mutual_funds')"><span>MF</span><span class="blade-name">Mutual Funds</span><span class="blade-val">₹{{ portfolio.mf_total|floatformat:0 }}</span><span class="chev" id="chev-blade-mutual_funds">▼</span></div><div class="blade-body" id="body-blade-mutual_funds"><div class="blade-layout mf-layout"><div class="side"><div class="stack"><div class="mini-panel"><div class="mini-title">Fund-wise Allocation</div><div class="blade-chart"><canvas id="mfBladeChart" width="250" height="250"></canvas></div></div><div class="mini-panel"><div class="mini-title">Equity / Debt / Hybrid</div><div class="blade-chart"><canvas id="mfSplitChart" width="250" height="250"></canvas></div></div>{% if portfolio.mf_analytics.has_transactions %}<div class="mini-panel"><div class="mini-title">Invested vs Current (tracked funds)</div><div class="mf-summary"><div class="mf-summary-row"><span>Invested</span><span>₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Current</span><span>₹{{ portfolio.mf_analytics.tracked_current_value|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Gain</span><span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }}{% if portfolio.mf_analytics.absolute_return_pct is not None %} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%){% endif %}</span></div><div class="mf-summary-row"><span>Portfolio XIRR</span><span class="{% if portfolio.mf_analytics.xirr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}n/a{% endif %}</span></div></div><div class="note">Based on funds with recorded transactions only — add MFTransactions rows for the rest to include them.</div></div>{% endif %}</div></div><div class="tblwrap"><table class="tbl">
-      <thead><tr><th scope="col">Fund</th><th scope="col" class="r">Units</th><th scope="col" class="r">NAV</th><th scope="col" class="r">Value</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Gain</th><th scope="col" class="r">XIRR</th><th scope="col" class="r">%</th></tr></thead>
+    <div class="blade reveal" id="blade-mutual_funds"><div class="blade-head" onclick="toggleBlade('blade-mutual_funds')"><span>MF</span><span class="blade-name">Mutual Funds</span><span class="blade-val">₹{{ portfolio.mf_total|floatformat:0 }}</span><span class="chev" id="chev-blade-mutual_funds">▼</span></div><div class="blade-body" id="body-blade-mutual_funds"><div class="blade-layout mf-layout"><div class="side"><div class="stack"><div class="mini-panel"><div class="mini-title">Fund-wise Allocation</div><div class="blade-chart"><canvas id="mfBladeChart" width="250" height="250"></canvas></div></div><div class="mini-panel"><div class="mini-title">Equity / Debt / Hybrid</div><div class="blade-chart"><canvas id="mfSplitChart" width="250" height="250"></canvas></div></div>{% if portfolio.mf_analytics.has_transactions %}<div class="mini-panel"><div class="mini-title">Invested vs Current (tracked funds)</div><div class="mf-summary"><div class="mf-summary-row"><span>Invested</span><span>₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Current</span><span>₹{{ portfolio.mf_analytics.tracked_current_value|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Gain</span><span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }}{% if portfolio.mf_analytics.absolute_return_pct is not None %} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%){% endif %}</span></div><div class="mf-summary-row"><span>Portfolio XIRR</span><span class="{% if portfolio.mf_analytics.xirr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}n/a{% endif %}</span></div>{% if portfolio.mf_analytics.best_fund %}<div class="mf-summary-row"><span>Best (XIRR)</span><span class="gain-pos">{{ portfolio.mf_analytics.best_fund.fund_name|truncatechars:24 }} ({{ portfolio.mf_analytics.best_fund.xirr_pct|floatformat:1 }}%)</span></div>{% endif %}{% if portfolio.mf_analytics.worst_fund %}<div class="mf-summary-row"><span>Worst (XIRR)</span><span class="gain-neg">{{ portfolio.mf_analytics.worst_fund.fund_name|truncatechars:24 }} ({{ portfolio.mf_analytics.worst_fund.xirr_pct|floatformat:1 }}%)</span></div>{% endif %}</div><div class="note">Based on funds with recorded transactions only — add MFTransactions rows for the rest to include them.</div></div><div class="mini-panel"><div class="mini-title">Capital Gains (indicative, 12-month test)</div><div class="mf-summary"><div class="mf-summary-row"><span>Unrealized Long-Term</span><span class="{% if portfolio.mf_analytics.capital_gains.unrealized_long_term_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.capital_gains.unrealized_long_term_gain|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Unrealized Short-Term</span><span class="{% if portfolio.mf_analytics.capital_gains.unrealized_short_term_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.capital_gains.unrealized_short_term_gain|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Realized Long-Term</span><span>₹{{ portfolio.mf_analytics.capital_gains.realized_long_term_gain|floatformat:0 }}</span></div><div class="mf-summary-row"><span>Realized Short-Term</span><span>₹{{ portfolio.mf_analytics.capital_gains.realized_short_term_gain|floatformat:0 }}</span></div></div><div class="note">Units held ≥ 365 days are classified long-term (equity-oriented rule). This is a holding-period split, not a tax bill — LTCG/STCG rates, the ₹1.25L exemption, and debt/hybrid slab-rate rules depend on your full-year gains. Verify with your CAS/tax advisor.</div></div>{% endif %}</div></div><div class="tblwrap"><table class="tbl">
+      <thead><tr><th scope="col">Fund</th><th scope="col" class="r">Units</th><th scope="col" class="r">NAV</th><th scope="col" class="r">Avg. Cost</th><th scope="col" class="r">Value</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Gain</th><th scope="col" class="r">XIRR</th><th scope="col" class="r">CAGR</th><th scope="col" class="r">%</th></tr></thead>
       <tbody>
       {% for f in portfolio.mutual_funds %}
-      <tr>
         <td>{{ f.fund_name }}<div class="sub">{{ f.identifier }} | {{ f.nav_source }}</div></td>
         <td class="r">{{ f.units|floatformat:2 }}</td>
         <td class="r">₹{{ f.nav|floatformat:2 }}</td>
+        <td class="r">{% if f.avg_cost_nav is not None %}₹{{ f.avg_cost_nav|floatformat:2 }}{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="r">₹{{ f.current_value|floatformat:0 }}</td>
         <td class="r">{% if f.transactions %}₹{{ f.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="r">{% if f.absolute_return_pct is not None %}<span class="{% if f.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ f.absolute_gain|floatformat:0 }} ({{ f.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="r">{% if f.xirr_pct is not None %}<span class="{% if f.xirr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.xirr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+        <td class="r">{% if f.cagr_pct is not None %}<span class="{% if f.cagr_pct >= 0 %}gain-pos{% else %}gain-neg{% endif %}">{{ f.cagr_pct|floatformat:1 }}%</span>{% else %}<span class="muted">–</span>{% endif %}</td>
         <td class="r">{{ f.pct|floatformat:1 }}%</td>
       </tr>
-      {% if f.transactions %}
-      <tr class="txn-row"><td colspan="8">
-        <details><summary>Transaction history ({{ f.transactions|length }}) — first investment {{ f.first_investment_date|date:"d M Y" }}</summary>
-          <table class="tbl txn-table"><thead><tr><th scope="col">Date</th><th scope="col">Type</th><th scope="col" class="r">Units</th><th scope="col" class="r">NAV</th><th scope="col" class="r">Amount</th></tr></thead>
-          <tbody>
-          {% for t in f.transactions %}
-          <tr><td>{{ t.date|date:"d M Y" }}</td><td>{{ t.type }}</td><td class="r">{{ t.units|floatformat:2 }}</td><td class="r">₹{{ t.nav|floatformat:2 }}</td><td class="r">{% if t.type == 'Invested' %}+{% else %}-{% endif %}₹{{ t.amount|floatformat:2 }}</td></tr>
-          {% endfor %}
-          </tbody></table>
-        </details>
-      </td></tr>
-      {% endif %}
       {% endfor %}
       </tbody>
-      <tfoot><tr><td colspan="4">Total</td><td class="r">{% if portfolio.mf_analytics.has_transactions %}₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.absolute_return_pct is not None %}<span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">100.0%</td></tr></tfoot>
+      <tfoot><tr><td colspan="5">Total</td><td class="r">{% if portfolio.mf_analytics.has_transactions %}₹{{ portfolio.mf_analytics.net_invested|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.absolute_return_pct is not None %}<span class="{% if portfolio.mf_analytics.absolute_gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ portfolio.mf_analytics.absolute_gain|floatformat:0 }} ({{ portfolio.mf_analytics.absolute_return_pct|floatformat:1 }}%)</span>{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">{% if portfolio.mf_analytics.xirr_pct is not None %}{{ portfolio.mf_analytics.xirr_pct|floatformat:1 }}%{% else %}<span class="muted">–</span>{% endif %}</td><td class="r">—</td><td class="r">100.0%</td></tr></tfoot>
     </table>
       <div style="margin-top:8px;border:1px solid var(--line2);border-radius:8px;overflow:hidden"><table class="tbl"><thead><tr><th>Type</th><th class="r">Value</th><th class="r">%</th></tr></thead><tbody>{% for s in portfolio.mf_split %}<tr><td>{{ s.type }}</td><td class="r">₹{{ s.value|floatformat:0 }}</td><td class="r">{{ s.pct|floatformat:1 }}</td></tr>{% endfor %}</tbody></table></div>
       </div></div></div></div>
@@ -696,7 +700,7 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
       {% if economic_allocation.unclassified_pct > 0 %}<div class="mini-panel"><div class="mini-title">Unclassified</div><div class="mf-summary-row"><span>Other / no look-through data</span><span>₹{{ economic_allocation.unclassified_value|floatformat:0 }} ({{ economic_allocation.unclassified_pct|floatformat:1 }}%)</span></div></div>{% endif %}
       </div></div>
       <div class="tblwrap">
-        <table class="tbl">
+        <table class="tbl ea-table">
           <thead><tr><th scope="col">Asset Class</th><th scope="col" class="r">Value</th><th scope="col" class="r">Current %</th><th scope="col" class="r">Target %</th><th scope="col" class="r">Deviation</th></tr></thead>
           <tbody>
           {% for b in economic_allocation.buckets %}
@@ -738,6 +742,96 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
         {% endif %}
         {% if not economic_allocation.has_targets %}<div class="note">No Targets sheet found — add one (columns AssetClass, TargetPct) to see deviation.</div>{% endif %}
         {% if not economic_allocation.has_overrides %}<div class="note">No LookThrough sheet found — buckets use conservative built-in defaults. Add a LookThrough sheet to declare exact NPS/EPF/fund mixes.</div>{% endif %}
+      </div>
+    </div></div>
+    {% endif %}
+
+    {% if portfolio.mf_purchase_lots %}
+    <div class="blade reveal" id="blade-purchase-lots"><div class="blade-head" onclick="toggleBlade('blade-purchase-lots')"><span>NP</span><span class="blade-name">Mutual Fund NAV Purchase</span><span class="blade-val">{{ portfolio.mf_purchase_lots|length }} lots</span><span class="chev" id="chev-blade-purchase-lots">▼</span></div><div class="blade-body" id="body-blade-purchase-lots">
+      <div class="note">Mark-to-market value of every PURCHASE transaction at today's NAV — what these exact units would be worth if sold today. "Holding" uses the 365-day equity-fund test (indicative only, not a tax computation).</div>
+      <div class="lot-toolbar">
+        <input type="text" id="lotFilterInput" class="lot-filter-input" placeholder="Filter by fund name…" onkeyup="filterPurchaseLots()" aria-label="Filter purchase lots by fund name">
+        <select id="lotFundSelect" class="lot-filter-select" onchange="selectPurchaseLotFund()" aria-label="Jump to a specific fund">
+          <option value="">All Funds</option>
+          {% for s in portfolio.mf_purchase_summary %}
+          <option value="{{ s.fund_name|lower }}">{{ s.fund_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="tblwrap">
+        <div class="mini-title">Summary by Fund</div>
+        <table class="tbl">
+          <thead><tr><th scope="col">Fund</th><th scope="col" class="r">Purchases</th><th scope="col" class="r">Units</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Current Value</th><th scope="col" class="r">Gain</th></tr></thead>
+          <tbody id="lotSummaryBody">
+          {% for s in portfolio.mf_purchase_summary %}
+          <tr class="lot-summary-row" data-fund="{{ s.fund_name|lower }}">
+            <td>{{ s.fund_name }}</td>
+            <td class="r">{{ s.purchase_count }}</td>
+            <td class="r">{{ s.units|floatformat:2 }}</td>
+            <td class="r">₹{{ s.invested_amount|floatformat:0 }}</td>
+            <td class="r">₹{{ s.current_value|floatformat:0 }}</td>
+            <td class="r"><span class="{% if s.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ s.gain|floatformat:0 }}{% if s.gain_pct is not None %} ({{ s.gain_pct|floatformat:1 }}%){% endif %}</span></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="tblwrap" style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div class="mini-title" style="margin-bottom:0">All Purchase Transactions</div>
+          <div class="lot-view-toggle" role="group" aria-label="Switch between flat and grouped views">
+            <button type="button" id="lotViewFlatBtn" class="active" onclick="setPurchaseLotView('flat')">Flat</button>
+            <button type="button" id="lotViewGroupedBtn" onclick="setPurchaseLotView('grouped')">Group by Fund</button>
+          </div>
+        </div>
+        <table class="tbl wide-tbl" id="lotFlatView">
+          <thead><tr><th scope="col">Date</th><th scope="col">Fund</th><th scope="col" class="r">Units</th><th scope="col" class="r">Purchase NAV</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Current NAV</th><th scope="col" class="r">Current Value</th><th scope="col" class="r">Gain</th><th scope="col">Holding</th></tr></thead>
+          <tbody id="lotLedgerBody">
+          {% for l in portfolio.mf_purchase_lots %}
+          <tr class="lot-row" data-fund="{{ l.fund_name|lower }}">
+            <td>{{ l.date|date:"d M Y" }}</td>
+            <td>{{ l.fund_name }}</td>
+            <td class="r">{{ l.units|floatformat:2 }}</td>
+            <td class="r">₹{{ l.purchase_nav|floatformat:2 }}</td>
+            <td class="r">₹{{ l.invested_amount|floatformat:0 }}</td>
+            <td class="r">₹{{ l.current_nav|floatformat:2 }}</td>
+            <td class="r">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td class="r">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+            <td>{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <div id="lotGroupedView" style="display:none">
+          {% for g in portfolio.mf_purchase_groups %}
+          <details class="lot-group" data-fund="{{ g.fund_name|lower }}">
+            <summary>
+              <span>{{ g.fund_name }}</span>
+              <span class="r">{{ g.purchase_count }} buys</span>
+              <span class="r">₹{{ g.invested_amount|floatformat:0 }} invested</span>
+              <span class="r">₹{{ g.current_value|floatformat:0 }} now</span>
+              <span class="r"><span class="{% if g.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ g.gain|floatformat:0 }}{% if g.gain_pct is not None %} ({{ g.gain_pct|floatformat:1 }}%){% endif %}</span></span>
+            </summary>
+            <table class="tbl txn-table">
+              <thead><tr><th scope="col">Date</th><th scope="col" class="r">Units</th><th scope="col" class="r">Purchase NAV</th><th scope="col" class="r">Invested</th><th scope="col" class="r">Current Value</th><th scope="col" class="r">Gain</th><th scope="col">Holding</th></tr></thead>
+              <tbody>
+              {% for l in g.lots %}
+              <tr>
+                <td>{{ l.date|date:"d M Y" }}</td>
+                <td class="r">{{ l.units|floatformat:2 }}</td>
+                <td class="r">₹{{ l.purchase_nav|floatformat:2 }}</td>
+                <td class="r">₹{{ l.invested_amount|floatformat:0 }}</td>
+                <td class="r">{% if l.current_value is not None %}₹{{ l.current_value|floatformat:0 }}{% else %}<span class="muted">–</span>{% endif %}</td>
+                <td class="r">{% if l.gain is not None %}<span class="{% if l.gain >= 0 %}gain-pos{% else %}gain-neg{% endif %}">₹{{ l.gain|floatformat:0 }}{% if l.gain_pct is not None %} ({{ l.gain_pct|floatformat:1 }}%){% endif %}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+                <td>{% if l.holding_period %}<span class="{% if l.holding_period == 'Long-Term' %}gain-pos{% else %}muted{% endif %}">{{ l.holding_period }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </details>
+          {% endfor %}
+        </div>
+        <div class="note" id="lotFilterEmpty" style="display:none">No purchases match that fund name.</div>
       </div>
     </div></div>
     {% endif %}
@@ -825,7 +919,60 @@ function toggleTheme(){
   if(window.__pfbRecolorCharts)window.__pfbRecolorCharts();
 }
 
-function toggleBlade(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);if(!b)return;var o=b.classList.contains('open');b.classList.toggle('open',!o);if(c){c.style.transform=o?'':'rotate(-90deg)';}}
+function toggleBlade(id){
+  var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);
+  if(!b)return;
+  var o=b.classList.contains('open');
+  b.classList.toggle('open',!o);
+  if(c){c.style.transform=o?'':'rotate(-90deg)';}
+  if(!o&&typeof __charts!=='undefined'){
+    // Charts created while this blade was display:none get a 0-width canvas;
+    // resize them now that the container has real dimensions.
+    requestAnimationFrame(function(){
+      __charts.forEach(function(chart){
+        if(chart&&chart.canvas&&b.contains(chart.canvas))chart.resize();
+      });
+    });
+  }
+}
+function filterPurchaseLots(){
+  var input=document.getElementById('lotFilterInput');
+  if(!input)return;
+  var q=(input.value||'').toLowerCase();
+  var visible=0;
+  document.querySelectorAll('#lotLedgerBody tr.lot-row').forEach(function(r){
+    var match=q===''||r.dataset.fund.indexOf(q)!==-1;
+    r.style.display=match?'':'none';
+    if(match)visible++;
+  });
+  document.querySelectorAll('#lotSummaryBody tr.lot-summary-row').forEach(function(r){
+    r.style.display=(q===''||r.dataset.fund.indexOf(q)!==-1)?'':'none';
+  });
+  document.querySelectorAll('#lotGroupedView details.lot-group').forEach(function(g){
+    g.style.display=(q===''||g.dataset.fund.indexOf(q)!==-1)?'':'none';
+  });
+  var empty=document.getElementById('lotFilterEmpty');
+  if(empty)empty.style.display=visible===0?'':'none';
+}
+function selectPurchaseLotFund(){
+  var select=document.getElementById('lotFundSelect');
+  var input=document.getElementById('lotFilterInput');
+  if(!select||!input)return;
+  input.value=select.value;
+  filterPurchaseLots();
+}
+function setPurchaseLotView(view){
+  var flat=document.getElementById('lotFlatView');
+  var grouped=document.getElementById('lotGroupedView');
+  var flatBtn=document.getElementById('lotViewFlatBtn');
+  var groupedBtn=document.getElementById('lotViewGroupedBtn');
+  if(!flat||!grouped)return;
+  var showGrouped=view==='grouped';
+  flat.style.display=showGrouped?'none':'';
+  grouped.style.display=showGrouped?'':'none';
+  if(flatBtn)flatBtn.classList.toggle('active',!showGrouped);
+  if(groupedBtn)groupedBtn.classList.toggle('active',showGrouped);
+}
 function copyPortfolio(){var el=document.getElementById('portfolio-md');if(!el)return;var t=document.getElementById('copyToast');navigator.clipboard.writeText(el.textContent).then(function(){if(t){t.classList.add('show');setTimeout(function(){t.classList.remove('show');},1400);}}).catch(function(){var r=document.createRange();r.selectNode(el);window.getSelection().removeAllRanges();window.getSelection().addRange(r);document.execCommand('copy');window.getSelection().removeAllRanges();});}
 
 /* ===== Export: PDF (print) ===== */
@@ -896,7 +1043,6 @@ document.addEventListener('DOMContentLoaded',function(){
   applyThemeIcon();
   initReveal();
   animateCountUp();
-  ['blade-mutual_funds','blade-risk'].forEach(function(id){var b=document.getElementById('body-'+id);var c=document.getElementById('chev-'+id);var h=document.querySelector('[aria-controls="body-'+id+'"]');if(b&&!b.classList.contains('open')){b.classList.add('open');if(c){c.style.transform='rotate(-90deg)';}if(h){h.setAttribute('aria-expanded','true');}}});
 });
 
 {% if portfolio %}

@@ -58,8 +58,11 @@ INPUT AND DATA
   - Insurance coverage is excluded from net worth.
 - XLSX limits: 10 MB compressed, 100 MB expanded, 2,000 ZIP entries; reject
   empty, encrypted, malformed, or disguised files.
-- MFTransactions columns: FundIdentifier, Date, Type (Invested/Redeemed),
-  Units, NAV. Amount auto-computed as Units × NAV.
+- MFTransactions preferred columns: Scheme Name, Transaction Type, Units, NAV,
+  Amount, Date. Scheme Name is matched (case/whitespace-insensitively) to
+  MutualFunds.FundName and stored against its Identifier. Transaction Type
+  accepts PURCHASE/REDEEM (also Invested/Redeemed for legacy sheets). Amount
+  is optional and auto-computed as Units × NAV when absent.
 - LookThrough columns: Key (fund Identifier or instrument Type), six buckets
   (Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other), optional equity
   style split (EquityLarge, EquityMid, EquitySmall, EquityIntl).

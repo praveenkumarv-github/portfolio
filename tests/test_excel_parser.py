@@ -361,6 +361,61 @@ class TestOptionalSheets:
         finally:
             os.unlink(path)
 
+    def test_mf_transactions_resolve_scheme_name_and_normalize_types(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets(mf_rows=[{
+            "FundName": "UTI Nifty 50 Index Fund Direct Growth",
+            "Units": 50.0,
+            "Identifier": "120716",
+        }])
+        sheets["MFTransactions"] = pd.DataFrame([
+            {
+                "Scheme Name": "UTI Nifty 50 Index Fund Direct Growth",
+                "Transaction Type": "PURCHASE",
+                "Units": 59.48,
+                "NAV": 168.12,
+                "Amount": 10_000,
+                "Date": "03 Sep 2026",
+            },
+            {
+                "Scheme Name": "uti  nifty  50 index fund direct growth",
+                "Transaction Type": "REDEEM",
+                "Units": 10.0,
+                "NAV": 170.0,
+                "Amount": 1_700,
+                "Date": "04 Sep 2026",
+            },
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            transactions = parse_excel_file(path)["data"]["mf_transactions"]
+            assert [transaction["identifier"] for transaction in transactions] == ["120716", "120716"]
+            assert [transaction["type"] for transaction in transactions] == ["Invested", "Redeemed"]
+            assert transactions[0]["amount"] == pytest.approx(10_000.0)
+        finally:
+            os.unlink(path)
+
+    def test_mf_transactions_unmatched_scheme_name_is_skipped_with_warning(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets()
+        sheets["MFTransactions"] = pd.DataFrame([{
+            "Scheme Name": "Unknown Fund Direct Growth",
+            "Transaction Type": "PURCHASE",
+            "Units": 10.0,
+            "NAV": 100.0,
+            "Amount": 1_000.0,
+            "Date": "03 Sep 2026",
+        }])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            result = parse_excel_file(path)
+            assert result["data"]["mf_transactions"] == []
+            assert any("does not match a MutualFunds FundName" in warning for warning in result["warnings"])
+        finally:
+            os.unlink(path)
+
     def test_mf_transactions_invalid_type_is_skipped_with_warning(self, mock_nav_factory, mock_metal_fn):
         mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
         sheets = _minimal_sheets()

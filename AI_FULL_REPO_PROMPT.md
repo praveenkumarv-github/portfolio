@@ -41,6 +41,17 @@ transaction-ledger reconciliation logic unless the issue explicitly asks for a
 financial-logic change. Security, deployment, authentication, storage, UI, and
 integration fixes must preserve financial behavior.
 
+MFTRANSACTIONS CONTRACT
+- New transaction rows use `Scheme Name`, `Transaction Type`, `Units`, `NAV`,
+  `Amount`, and `Date`.
+- Resolve Scheme Name only through `MutualFunds.FundName` (case and repeated
+  whitespace insensitive), then use that row's Identifier for XIRR, gain, and
+  unit reconciliation.
+- Normalize `PURCHASE` to Invested and `REDEEM` to Redeemed. Do not guess an
+  identifier for an unmatched or ambiguous scheme name; skip it with a warning.
+- Preserve legacy `FundIdentifier` plus `Type` ledgers unless the task explicitly
+  removes backward compatibility.
+
 FACT DISCIPLINE
 - Inspect attached files before drawing conclusions.
 - Distinguish verified repository facts, assumptions, and live-environment

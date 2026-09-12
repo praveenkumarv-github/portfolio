@@ -205,13 +205,13 @@ calculations, and alert rules were not changed by these enhancements.
 
 | Sheet | Key columns | Purpose |
 |---|---|---|
-| `MFTransactions` | `FundIdentifier`, `Date`, `Type`, `Units`, `NAV` | SIP/lump-sum ledger (drives XIRR and gain) |
+| `MFTransactions` | `Scheme Name`, `Transaction Type`, `Units`, `NAV`, `Amount`, `Date` | SIP/lump-sum ledger (drives XIRR and gain) |
 | `LookThrough` | `Key`, `Equity`, `CorporateDebt`, `GovtSecurities`, `Cash`, `Gold`, `Other` | Economic bucket overrides per fund/type |
 | `Targets` | `AssetClass`, `TargetPct` | Target allocations for deviation tracking |
 
 `Identifier` is an AMFI scheme code or ISIN. Optional `Symbol` (for example, `MUTF_IN:...`) can be used as a fallback when AMFI/MFAPI are unavailable. `MaturityDate` uses `YYYY-MM-DD`.
 
-MFTransactions: `Type` accepts Invested/Redeemed (case-insensitive); `Amount` auto-computed as `Units × NAV`. Unknown transaction types are skipped with a warning.
+MFTransactions: `Scheme Name` must match `MutualFunds.FundName` (case and repeated whitespace are ignored); the parser uses that row's `Identifier` internally. `Transaction Type` accepts `PURCHASE`/`REDEEM` (case-insensitive) and is normalized to Invested/Redeemed. `Amount` is optional and auto-computed as `Units × NAV`. A transaction with an unmatched or ambiguous scheme name, or an unknown type, is skipped with a warning. Legacy `FundIdentifier` + `Type` ledgers remain supported.
 
 LookThrough: `Key` is the fund Identifier or instrument Type (PF, EPF, NPS, etc.). Bucket percentages are normalized to 100. Optional equity-style columns (EquityLarge, EquityMid, EquitySmall, EquityIntl) refine equity classification when present.
 

@@ -255,3 +255,177 @@ class TestCalculationEngine:
         # gain must be 1100-1000=100, NOT 1100+5000-1000=5100
         assert portfolio.mf_analytics["absolute_gain"] == pytest.approx(100.0)
 
+    def test_avg_cost_nav_and_cagr_computed_per_fund(self):
+        from datetime import date, timedelta
+        from dashboard.services.calculation_engine import build_portfolio
+
+        first_date = date.today() - timedelta(days=730)
+        data = {
+            "mutual_funds_summary": {"total_current_value": 2000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Fund A", "identifier": "A1", "current_value": 2000.0, "nav": 20.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "A1", "date": first_date, "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        fund = portfolio.mutual_funds[0]
+        assert fund["avg_cost_nav"] == pytest.approx(10.0)
+        assert fund["cagr_pct"] is not None
+        assert fund["cagr_pct"] > 0  # current_value(2000) > invested(1000) over 2 years
+
+    def test_best_and_worst_fund_ranking(self):
+        from datetime import date
+        from dashboard.services.calculation_engine import build_portfolio
+
+        data = {
+            "mutual_funds_summary": {"total_current_value": 2200.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Winner Fund", "identifier": "W1", "current_value": 2000.0, "nav": 20.0, "fund_type": ""},
+                {"fund_name": "Loser Fund", "identifier": "L1", "current_value": 200.0, "nav": 2.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "W1", "date": date(2025, 1, 1), "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+                {"identifier": "L1", "date": date(2025, 1, 1), "type": "Invested", "units": 100.0, "nav": 3.0, "amount": 300.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        assert portfolio.mf_analytics["best_fund"]["identifier"] == "W1"
+        assert portfolio.mf_analytics["worst_fund"]["identifier"] == "L1"
+
+    def test_portfolio_capital_gains_rollup_sums_across_funds(self):
+        from datetime import date
+        from dashboard.services.calculation_engine import build_portfolio
+
+        data = {
+            "mutual_funds_summary": {"total_current_value": 3000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Fund A", "identifier": "A1", "current_value": 1500.0, "nav": 15.0, "fund_type": ""},
+                {"fund_name": "Fund B", "identifier": "B1", "current_value": 1500.0, "nav": 15.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                # Fund A: long-term holding (>365 days) -> unrealized long-term gain
+                {"identifier": "A1", "date": date(2025, 1, 1), "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+                # Fund B: short-term holding (<365 days) -> unrealized short-term gain
+                {"identifier": "B1", "date": date(2026, 6, 1), "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        cg = portfolio.mf_analytics["capital_gains"]
+        assert cg["unrealized_long_term_gain"] == pytest.approx(500.0)
+        assert cg["unrealized_short_term_gain"] == pytest.approx(500.0)
+
+    def test_transaction_current_value_annotated_for_invested_rows(self):
+        from datetime import date, timedelta
+        from dashboard.services.calculation_engine import build_portfolio
+
+        purchase_date = date.today() - timedelta(days=400)  # long-term by today
+        data = {
+            "mutual_funds_summary": {"total_current_value": 2000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Sundaram Arbitrage Fund Direct Growth", "identifier": "149550", "current_value": 2000.0, "nav": 20.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "149550", "date": purchase_date, "type": "Invested", "units": 169.47, "nav": 15.34, "amount": 2599.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        txn = portfolio.mutual_funds[0]["transactions"][0]
+        assert txn["current_value"] == pytest.approx(169.47 * 20.0)
+        assert txn["gain"] == pytest.approx((169.47 * 20.0) - 2599.0)
+        assert txn["holding_period"] == "Long-Term"
+
+    def test_redeemed_rows_have_no_current_value(self):
+        from datetime import date
+        from dashboard.services.calculation_engine import build_portfolio
+
+        data = {
+            "mutual_funds_summary": {"total_current_value": 1000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Fund A", "identifier": "A1", "current_value": 1000.0, "nav": 10.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "A1", "date": date(2025, 1, 1), "type": "Invested", "units": 200.0, "nav": 5.0, "amount": 1000.0},
+                {"identifier": "A1", "date": date(2025, 6, 1), "type": "Redeemed", "units": 100.0, "nav": 8.0, "amount": 800.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        txns = portfolio.mutual_funds[0]["transactions"]
+        redeemed = next(t for t in txns if t["type"] == "Redeemed")
+        assert redeemed["current_value"] is None
+        assert redeemed["holding_period"] is None
+
+    def test_purchase_lot_ledger_flattened_across_funds_sorted_desc(self):
+        from datetime import date
+        from dashboard.services.calculation_engine import build_portfolio
+
+        data = {
+            "mutual_funds_summary": {"total_current_value": 3000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Fund A", "identifier": "A1", "current_value": 1500.0, "nav": 15.0, "fund_type": ""},
+                {"fund_name": "Fund B", "identifier": "B1", "current_value": 1500.0, "nav": 15.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "A1", "date": date(2026, 1, 1), "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+                {"identifier": "B1", "date": date(2026, 3, 1), "type": "Invested", "units": 100.0, "nav": 10.0, "amount": 1000.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        lots = portfolio.mf_purchase_lots
+        assert len(lots) == 2
+        assert lots[0]["fund_name"] == "Fund B"  # most recent purchase first
+        assert lots[0]["current_value"] == pytest.approx(1500.0)
+
+    def test_purchase_summary_groups_multiple_lots_per_fund(self):
+        from datetime import date
+        from dashboard.services.calculation_engine import build_portfolio
+
+        data = {
+            "mutual_funds_summary": {"total_current_value": 2000.0},
+            "retirement_total": 0.0, "liquid_total": 0.0, "emergency_fund_total": 0.0, "metals_total": 0.0,
+            "insurance_summary": {"total_premium": 0.0, "total_coverage": 0.0},
+            "mutual_funds": [
+                {"fund_name": "Fund A", "identifier": "A1", "current_value": 2000.0, "nav": 10.0, "fund_type": ""},
+            ],
+            "retirement": [], "liquid": [], "emergency_fund": [], "emergency_fund_by_type": {},
+            "metals": [], "insurance": [],
+            "mf_transactions": [
+                {"identifier": "A1", "date": date(2026, 1, 1), "type": "Invested", "units": 100.0, "nav": 8.0, "amount": 800.0},
+                {"identifier": "A1", "date": date(2026, 2, 1), "type": "Invested", "units": 100.0, "nav": 9.0, "amount": 900.0},
+            ],
+        }
+        portfolio = build_portfolio(data)
+        summary = portfolio.mf_purchase_summary
+        assert len(summary) == 1
+        row = summary[0]
+        assert row["units"] == pytest.approx(200.0)
+        assert row["invested_amount"] == pytest.approx(1700.0)
+        assert row["current_value"] == pytest.approx(2000.0)
+        assert row["gain"] == pytest.approx(300.0)
+        assert row["purchase_count"] == 2
+

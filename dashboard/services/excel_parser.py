@@ -365,10 +365,11 @@ class ExcelParser:
     def _parse_mf_transactions(self):
         """Parse optional MFTransactions sheet (SIP/lump-sum ledger per fund).
 
-        Columns: FundIdentifier, Date, Type (Invested/Redeemed), Units, NAV.
-        Amount is optional — computed as Units * NAV when not supplied.
-        Entirely optional: absence does not affect NAV/value calculations,
-        it only powers the invested-vs-current / XIRR view per fund.
+        Preferred columns: Scheme Name, Transaction Type, Units, NAV, Amount,
+        Date. Scheme Name is resolved to MutualFunds.FundName and its matching
+        Identifier is retained internally. The legacy FundIdentifier and Type
+        columns remain supported. Amount is optional and otherwise calculated
+        from Units * NAV.
         """
         sheet_name = 'MFTransactions'
         self.data['mf_transactions'] = []
@@ -377,15 +378,28 @@ class ExcelParser:
             return
 
         df = pd.read_excel(self.excel_file, sheet_name=sheet_name)
-        required_cols = ['FundIdentifier', 'Date', 'Type', 'Units', 'NAV']
-        missing_cols = [col for col in required_cols if col not in df.columns]
+        identifier_col = 'FundIdentifier' if 'FundIdentifier' in df.columns else None
+        scheme_name_col = 'Scheme Name' if 'Scheme Name' in df.columns else None
+        type_col = 'Transaction Type' if 'Transaction Type' in df.columns else 'Type'
+        missing_cols = [
+            col for col in ('Date', 'Units', 'NAV') if col not in df.columns
+        ]
+        if not identifier_col and not scheme_name_col:
+            missing_cols.append('Scheme Name or FundIdentifier')
+        if type_col not in df.columns:
+            missing_cols.append('Transaction Type or Type')
         if missing_cols:
             self.warnings.append(
                 f"{sheet_name}: Missing columns - {', '.join(missing_cols)} (transaction history skipped)"
             )
             return
 
-        df = df.dropna(subset=['FundIdentifier', 'Date', 'Type'])
+        required_row_cols = ['Date', type_col]
+        if identifier_col:
+            required_row_cols.append(identifier_col)
+        else:
+            required_row_cols.append(scheme_name_col)
+        df = df.dropna(subset=required_row_cols)
         df['Units'] = pd.to_numeric(df['Units'], errors='coerce').fillna(0)
         df['NAV'] = pd.to_numeric(df['NAV'], errors='coerce').fillna(0)
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
@@ -393,21 +407,55 @@ class ExcelParser:
         if has_amount:
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
 
+        def normalize_fund_name(value: Any) -> str:
+            return ' '.join(str(value).casefold().split())
+
+        identifiers_by_name = {}
+        for fund in self.data.get('mutual_funds', []):
+            name = normalize_fund_name(fund.get('fund_name', ''))
+            if name:
+                identifiers_by_name.setdefault(name, []).append(str(fund.get('identifier', '')).strip())
+
         transactions = []
         for _, row in df.iterrows():
             if pd.isna(row['Date']):
                 self.warnings.append(f"{sheet_name}: Skipped row with unparsable Date")
                 continue
-            txn_type = str(row['Type']).strip().capitalize()
-            if txn_type not in ('Invested', 'Redeemed'):
-                self.warnings.append(f"{sheet_name}: Unknown Type '{row['Type']}' — must be Invested or Redeemed")
+            raw_type = str(row[type_col]).strip()
+            type_map = {
+                'invested': 'Invested',
+                'purchase': 'Invested',
+                'purchased': 'Invested',
+                'redeemed': 'Redeemed',
+                'redeem': 'Redeemed',
+                'redemption': 'Redeemed',
+            }
+            txn_type = type_map.get(raw_type.casefold())
+            if txn_type is None:
+                self.warnings.append(
+                    f"{sheet_name}: Unknown {type_col} '{raw_type}' — must be PURCHASE or REDEEM"
+                )
                 continue
+
+            if identifier_col:
+                identifier = str(row[identifier_col]).strip()
+            else:
+                scheme_name = str(row[scheme_name_col]).strip()
+                matches = identifiers_by_name.get(normalize_fund_name(scheme_name), [])
+                if len(matches) != 1:
+                    reason = 'does not match a MutualFunds FundName' if not matches else 'matches multiple MutualFunds rows'
+                    self.warnings.append(
+                        f"{sheet_name}: Scheme Name '{scheme_name}' {reason}; transaction skipped"
+                    )
+                    continue
+                identifier = matches[0]
+
             units = float(row['Units'])
             nav = float(row['NAV'])
             amount = float(row['Amount']) if has_amount and pd.notna(row.get('Amount')) else units * nav
 
             transactions.append({
-                'identifier': str(row['FundIdentifier']).strip(),
+                'identifier': identifier,
                 'date': row['Date'].to_pydatetime().date(),
                 'type': txn_type,
                 'units': units,

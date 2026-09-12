@@ -20,6 +20,7 @@ from datetime import date as _date
 from typing import Dict, List, Any, Optional
 
 from .xirr import xirr as _xirr
+from .capital_gains import classify_holding_periods as _classify_holding_periods
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +93,12 @@ class PortfolioSummary:
 
     # Invested-vs-current analytics for mutual funds (SIP/lump-sum ledger, optional)
     mf_analytics: dict = field(default_factory=dict)
+
+    # Flat, filterable ledger of every PURCHASE transaction with today's
+    # mark-to-market value, and the same rolled up per fund.
+    mf_purchase_lots: List[dict] = field(default_factory=list)
+    mf_purchase_summary: List[dict] = field(default_factory=list)
+    mf_purchase_groups: List[dict] = field(default_factory=list)
 
     has_data: bool = True
 
@@ -176,12 +183,45 @@ def _mini_chart(labels: List[str], values: List[float], colours: List[str]) -> d
     return {"labels": out_l, "values": out_v, "colours": out_c}
 
 
-def _fund_transaction_analytics(identifier: str, txns: List[dict], current_value: float) -> dict:
-    """Invested amount, absolute gain, and XIRR for one fund's SIP/lump-sum ledger.
+def _annotate_transaction_valuations(fund_txns: List[dict], current_nav: float, as_of: _date) -> List[dict]:
+    """Attach a mark-to-market value to each PURCHASE row: what these exact
+    units are worth today at the fund's live NAV. This ignores whether some
+    of those units were later sold (that net position is already reflected
+    in the fund's own Units/current_value) — it answers "what is this one
+    purchase worth today", not "what remains of it".
+    """
+    annotated = []
+    for t in fund_txns:
+        row = dict(t)
+        if t["type"] == "Invested" and current_nav > 0:
+            current_value = t["units"] * current_nav
+            gain = current_value - t["amount"]
+            held_days = (as_of - t["date"]).days
+            row["current_value"] = current_value
+            row["gain"] = gain
+            row["gain_pct"] = _pct(gain, t["amount"]) if t["amount"] > 0 else None
+            row["holding_days"] = held_days
+            row["holding_period"] = "Long-Term" if held_days >= 365 else "Short-Term"
+        else:
+            row["current_value"] = None
+            row["gain"] = None
+            row["gain_pct"] = None
+            row["holding_days"] = None
+            row["holding_period"] = None
+        annotated.append(row)
+    return annotated
+
+
+def _fund_transaction_analytics(
+    identifier: str, txns: List[dict], current_value: float, current_nav: float = 0.0
+) -> dict:
+    """Invested amount, absolute gain, XIRR, avg. cost, CAGR, and LTCG/STCG
+    split for one fund's SIP/lump-sum ledger.
 
     net_invested is a simple invested-minus-redeemed running balance (not a
-    FIFO/LIFO cost-basis reconstruction) — adequate for a gain/XIRR view but
-    not for tax-lot accounting.
+    FIFO/LIFO cost-basis reconstruction) — adequate for a gain/XIRR view.
+    avg_cost_nav and capital_gains use a proper FIFO lot walk (see
+    capital_gains.py) since holding period and cost-per-unit need actual lots.
     """
     fund_txns = sorted(
         (t for t in txns if t.get("identifier") == identifier),
@@ -197,11 +237,19 @@ def _fund_transaction_analytics(identifier: str, txns: List[dict], current_value
             "absolute_return_pct": None,
             "xirr_pct": None,
             "first_investment_date": None,
+            "avg_cost_nav": None,
+            "cagr_pct": None,
+            "capital_gains": None,
         }
 
     invested = sum(_non_negative(t["amount"]) for t in fund_txns if t["type"] == "Invested")
     redeemed = sum(_non_negative(t["amount"]) for t in fund_txns if t["type"] == "Redeemed")
     net_invested = invested - redeemed
+
+    invested_units = sum(_non_negative(t["units"]) for t in fund_txns if t["type"] == "Invested")
+    redeemed_units = sum(_non_negative(t["units"]) for t in fund_txns if t["type"] == "Redeemed")
+    net_units_held = invested_units - redeemed_units
+    avg_cost_nav = round(net_invested / net_units_held, 4) if net_units_held > 0 else None
 
     cashflows = [
         (t["date"], -_non_negative(t["amount"]) if t["type"] == "Invested" else _non_negative(t["amount"]))
@@ -213,8 +261,13 @@ def _fund_transaction_analytics(identifier: str, txns: List[dict], current_value
     rate = _xirr(cashflows)
     absolute_gain = current_value - net_invested
 
+    days_held = (_date.today() - fund_txns[0]["date"]).days
+    cagr_pct = None
+    if net_invested > 0 and current_value > 0 and days_held > 0:
+        cagr_pct = round((((current_value / net_invested) ** (365.0 / days_held)) - 1) * 100, 2)
+
     return {
-        "transactions": fund_txns,
+        "transactions": _annotate_transaction_valuations(fund_txns, current_nav, _date.today()),
         "invested_amount": invested,
         "redeemed_amount": redeemed,
         "net_invested": net_invested,
@@ -222,6 +275,9 @@ def _fund_transaction_analytics(identifier: str, txns: List[dict], current_value
         "absolute_return_pct": _pct(absolute_gain, net_invested) if net_invested > 0 else None,
         "xirr_pct": round(rate * 100, 2) if rate is not None else None,
         "first_investment_date": fund_txns[0]["date"],
+        "avg_cost_nav": avg_cost_nav,
+        "cagr_pct": cagr_pct,
+        "capital_gains": _classify_holding_periods(fund_txns, current_nav, _date.today()),
     }
 
 
@@ -229,6 +285,10 @@ def _portfolio_mf_analytics(mf_list: List[dict], mf_txns: List[dict]) -> dict:
     """Pooled invested-vs-current + XIRR across only the funds that have a
     recorded transaction ledger — NOT the whole mf_total, otherwise funds
     with no ledger would inflate the pooled gain as if free money.
+
+    Assumes mf_list entries have already been updated with per-fund
+    analytics (xirr_pct, capital_gains) so the best/worst ranking and
+    capital-gains rollup can reuse that work instead of recomputing it.
     """
     tracked_identifiers = {t.get("identifier") for t in mf_txns}
     tracked_current_value = sum(
@@ -256,6 +316,29 @@ def _portfolio_mf_analytics(mf_list: List[dict], mf_txns: List[dict]) -> dict:
     rate = _xirr(cashflows) if cashflows else None
     absolute_gain = tracked_current_value - net_invested
 
+    ranked = [f for f in mf_list if f.get("xirr_pct") is not None]
+    best_fund = max(ranked, key=lambda f: f["xirr_pct"], default=None)
+    worst_fund = min(ranked, key=lambda f: f["xirr_pct"], default=None)
+
+    def _fund_ref(f):
+        if not f:
+            return None
+        return {"fund_name": f.get("fund_name"), "identifier": f.get("identifier"), "xirr_pct": f.get("xirr_pct")}
+
+    cg_keys = (
+        "realized_long_term_gain", "realized_short_term_gain",
+        "unrealized_long_term_gain", "unrealized_short_term_gain",
+    )
+    capital_gains = {key: 0.0 for key in cg_keys}
+    for f in mf_list:
+        cg = f.get("capital_gains")
+        if not cg:
+            continue
+        for key in cg_keys:
+            capital_gains[key] += cg.get(key, 0.0)
+    for key in cg_keys:
+        capital_gains[key] = round(capital_gains[key], 2)
+
     return {
         "invested_amount": invested,
         "redeemed_amount": redeemed,
@@ -265,7 +348,95 @@ def _portfolio_mf_analytics(mf_list: List[dict], mf_txns: List[dict]) -> dict:
         "absolute_return_pct": _pct(absolute_gain, net_invested) if net_invested > 0 else None,
         "xirr_pct": round(rate * 100, 2) if rate is not None else None,
         "has_transactions": bool(mf_txns),
+        "best_fund": _fund_ref(best_fund),
+        "worst_fund": _fund_ref(worst_fund),
+        "capital_gains": capital_gains,
     }
+
+
+def _purchase_lot_ledger(mf_list: List[dict]) -> List[dict]:
+    """Flatten every fund's PURCHASE transactions (with their mark-to-market
+    fields already attached) into one filterable, date-descending list."""
+    lots = []
+    for f in mf_list:
+        for t in f.get("transactions", []):
+            if t.get("type") != "Invested":
+                continue
+            lots.append({
+                "fund_name": f.get("fund_name"),
+                "identifier": f.get("identifier"),
+                "date": t["date"],
+                "units": t["units"],
+                "purchase_nav": t["nav"],
+                "invested_amount": t["amount"],
+                "current_nav": _safe_float(f.get("nav", 0)),
+                "current_value": t.get("current_value"),
+                "gain": t.get("gain"),
+                "gain_pct": t.get("gain_pct"),
+                "holding_days": t.get("holding_days"),
+                "holding_period": t.get("holding_period"),
+            })
+    lots.sort(key=lambda row: row["date"], reverse=True)
+    return lots
+
+
+def _purchase_summary_by_fund(lots: List[dict]) -> List[dict]:
+    """Group the purchase-lot ledger by fund: total units bought, total
+    invested, and total mark-to-market value/gain across all purchases."""
+    totals: Dict[str, dict] = {}
+    for row in lots:
+        key = row["identifier"] or row["fund_name"]
+        agg = totals.setdefault(key, {
+            "fund_name": row["fund_name"],
+            "identifier": row["identifier"],
+            "units": 0.0,
+            "invested_amount": 0.0,
+            "current_value": 0.0,
+            "purchase_count": 0,
+        })
+        agg["units"] += row["units"]
+        agg["invested_amount"] += row["invested_amount"]
+        agg["current_value"] += row["current_value"] or 0.0
+        agg["purchase_count"] += 1
+
+    summary = []
+    for agg in totals.values():
+        gain = agg["current_value"] - agg["invested_amount"]
+        agg["gain"] = gain
+        agg["gain_pct"] = _pct(gain, agg["invested_amount"]) if agg["invested_amount"] > 0 else None
+        summary.append(agg)
+    summary.sort(key=lambda a: a["current_value"], reverse=True)
+    return summary
+
+
+def _purchase_lots_grouped(lots: List[dict]) -> List[dict]:
+    """Same purchase-lot ledger as _purchase_summary_by_fund, but keeping the
+    individual lots nested per fund for a collapsible group-by-fund view."""
+    groups: Dict[str, dict] = {}
+    for row in lots:
+        key = row["identifier"] or row["fund_name"]
+        group = groups.setdefault(key, {
+            "fund_name": row["fund_name"],
+            "identifier": row["identifier"],
+            "lots": [],
+            "units": 0.0,
+            "invested_amount": 0.0,
+            "current_value": 0.0,
+        })
+        group["lots"].append(row)  # lots list is already date-descending
+        group["units"] += row["units"]
+        group["invested_amount"] += row["invested_amount"]
+        group["current_value"] += row["current_value"] or 0.0
+
+    result = []
+    for group in groups.values():
+        gain = group["current_value"] - group["invested_amount"]
+        group["gain"] = gain
+        group["gain_pct"] = _pct(gain, group["invested_amount"]) if group["invested_amount"] > 0 else None
+        group["purchase_count"] = len(group["lots"])
+        result.append(group)
+    result.sort(key=lambda g: g["current_value"], reverse=True)
+    return result
 
 
 def _classify_fund_type(fund: dict) -> str:
@@ -408,9 +579,13 @@ def build_portfolio(data: dict) -> PortfolioSummary:
     mf_txns_raw = data.get("mf_transactions") or []
     for f in mf_list:
         f.update(_fund_transaction_analytics(
-            f.get("identifier", ""), mf_txns_raw, _safe_float(f.get("current_value", 0))
+            f.get("identifier", ""), mf_txns_raw,
+            _safe_float(f.get("current_value", 0)), _safe_float(f.get("nav", 0)),
         ))
     mf_analytics = _portfolio_mf_analytics(mf_list, mf_txns_raw)
+    mf_purchase_lots = _purchase_lot_ledger(mf_list)
+    mf_purchase_summary = _purchase_summary_by_fund(mf_purchase_lots)
+    mf_purchase_groups = _purchase_lots_grouped(mf_purchase_lots)
 
     mf_chart = _mini_chart(
         [str(f.get("fund_name", "Fund"))[:20] for f in mf_list],
@@ -557,4 +732,7 @@ def build_portfolio(data: dict) -> PortfolioSummary:
         risk_rows=risk_rows,
         risk_summary=risk_summary,
         mf_analytics=mf_analytics,
+        mf_purchase_lots=mf_purchase_lots,
+        mf_purchase_summary=mf_purchase_summary,
+        mf_purchase_groups=mf_purchase_groups,
     )

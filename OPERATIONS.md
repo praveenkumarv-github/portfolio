@@ -40,7 +40,7 @@ The MFTransactions sheet (optional) enables per-fund and portfolio-level transac
 - **Portfolio-level analytics** (`calculation_engine._portfolio_mf_analytics`): pools XIRR and gain across only the funds that have a recorded transaction ledger. Funds without a ledger do not inflate pooled gain.
 - **Data quality check** (`validators.validate_portfolio_data`): warns if a fund's MFTransactions net units (Invested - Redeemed) do not reconcile within ±0.5% of its declared Units. This catches incomplete or mismatched ledgers.
 
-MFTransactions columns: `FundIdentifier`, `Date`, `Type` (Invested/Redeemed, case-insensitive), `Units`, `NAV`. Amount is auto-computed as `Units × NAV` if not supplied. Invalid transaction types are skipped with a warning.
+MFTransactions preferred columns: `Scheme Name`, `Transaction Type`, `Units`, `NAV`, `Amount`, `Date`. The parser resolves Scheme Name to the matching `MutualFunds.FundName` (case and repeated whitespace are ignored), then uses that mutual fund's Identifier for analytics and reconciliation. Transaction Type accepts `PURCHASE`/`REDEEM` (case-insensitive) and is internally normalized to Invested/Redeemed. Amount is optional and auto-computed as `Units × NAV` if not supplied. An unmatched/ambiguous scheme name or invalid transaction type is skipped with a warning. Legacy `FundIdentifier` + `Type` columns remain supported for existing workbooks.
 
 ## Economic Asset Allocation (Look-Through)
 

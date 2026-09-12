@@ -119,16 +119,19 @@ Track SIP or lump-sum investments per mutual fund to enable XIRR, absolute retur
 
 | Column | Type | Example | Notes |
 |--------|------|---------|-------|
-| FundIdentifier | Text | 120716 | Must match the Identifier in MutualFunds sheet |
-| Date | Date | 2025-08-07 | Transaction date (earliest first within a fund) |
-| Type | Text | Invested | Or Redeemed (case-insensitive); unknown types are skipped with a warning |
+| Scheme Name | Text | UTI Nifty 50 Index Fund Direct Growth | Must match FundName in MutualFunds (case/repeated whitespace ignored) |
+| Transaction Type | Text | PURCHASE | Or REDEEM (case-insensitive); unknown types are skipped with a warning |
 | Units | Number | 173.393 | Units bought/sold |
 | NAV | Number | 173.0145 | NAV on transaction date |
+| Amount | Number | 10,000 | Transaction value; optional because Units × NAV is used when omitted |
+| Date | Date | 2025-08-07 | Transaction date (earliest first within a fund) |
 
-- Amount is auto-computed as `Units × NAV`.
+- The parser resolves Scheme Name to the corresponding MutualFunds Identifier.
+- Amount is auto-computed as `Units × NAV` when it is omitted.
 - All dates must be in the past (≤ today) for XIRR to solve.
 - At least 2 cashflows (e.g., 1 investment + current value) are required for a meaningful XIRR.
 - The validator warns if a fund's total (Invested - Redeemed) units don't match its declared Units; fix the ledger to avoid gain/XIRR inaccuracy.
+- Legacy `FundIdentifier` + `Type` sheets remain accepted, but new rows should use this Scheme Name format.
 
 ### LookThrough (Optional: Economic Asset Allocation Overrides)
 Declare the underlying economic mix of funds and retirement instruments to see "what you actually own" vs. product labels:

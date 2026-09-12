@@ -86,22 +86,23 @@ metals_data = {
 
 # MF TRANSACTIONS - NEW SHEET: SIP/lump-sum ledger per fund (optional)
 # Powers Invested-vs-Current, absolute gain, and XIRR in the MF blade.
-# UTI Nifty 50 (identifier 120716) gets a realistic 12-month SIP history
-# that reconciles to its full 606.20 declared Units; the other funds have
-# no ledger, demonstrating the "no history available" fallback state too.
+# UTI Nifty 50 gets a realistic 12-month SIP history. Scheme Name is the
+# user-facing ledger key and is resolved to MutualFunds.Identifier by parser.
+# The other funds have no ledger, demonstrating the fallback state too.
 _sip_months = 12
 _sip_units_per_month = round(606.20 / _sip_months, 4)
 _sip_nav_series = [148.00, 150.40, 152.10, 149.80, 153.60, 156.20,
                    158.90, 161.30, 163.00, 165.40, 167.10, 168.31]
 mf_transactions_data = {
-    'FundIdentifier': ['120716'] * _sip_months,
+    'Scheme Name': ['UTI Nifty 50 Index Fund Direct Growth'] * _sip_months,
+    'Transaction Type': ['PURCHASE'] * _sip_months,
+    'Units': [_sip_units_per_month] * _sip_months,
+    'NAV': _sip_nav_series,
+    'Amount': [round(_sip_units_per_month * nav, 2) for nav in _sip_nav_series],
     'Date': [
         (datetime.now() - timedelta(days=30 * (_sip_months - i))).strftime('%Y-%m-%d')
         for i in range(_sip_months)
     ],
-    'Type': ['Invested'] * _sip_months,
-    'Units': [_sip_units_per_month] * _sip_months,
-    'NAV': _sip_nav_series,
 }
 
 # LOOKTHROUGH - NEW SHEET: economic look-through overrides (optional)
