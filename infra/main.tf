@@ -87,6 +87,30 @@ resource "aws_s3_bucket_versioning" "deploy" {
   }
 }
 
+data "aws_iam_policy_document" "lambda_slim_handler" {
+  statement {
+    sid    = "AllowLambdaSlimHandlerDownload"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject"
+    ]
+    resources = [
+      "${aws_s3_bucket.deploy.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "lambda_slim_handler" {
+  name        = "${var.project}-lambda-slim-handler-${var.environment}"
+  description = "Allows Lambda execution role to fetch Zappa slim handler code package"
+  policy      = data.aws_iam_policy_document.lambda_slim_handler.json
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_slim_handler" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_slim_handler.arn
+}
+
 data "aws_iam_policy_document" "lambda_net_worth" {
   statement {
     sid       = "ListNetWorthHistory"
