@@ -35,6 +35,9 @@ def test_patch_produces_secure_lambda_configuration():
 
     assert production["project_name"] == "portfolio"
     assert production["runtime"] == "python3.11"
+    assert production["manage_roles"] is False
+    assert production["role_name"] == "existing"
+    assert production["role_arn"] == "arn:aws:iam::123456789012:role/existing"
     assert production["ephemeral_storage"] == {"Size": 3072}
     assert "GOOGLE_SERVICE_ACCOUNT_JSON" not in variables
     assert "GOOGLE_SERVICE_ACCOUNT_SECRET_ID" not in variables
@@ -47,6 +50,8 @@ def test_patch_uses_terraform_outputs_when_present():
         copy.deepcopy(BASE_CONFIG),
         _environment(TF_ROLE_ARN="arn:aws:iam::123456789012:role/from-terraform", TF_S3_BUCKET="tf-bucket"),
     )
+    assert config["production"]["manage_roles"] is False
+    assert config["production"]["role_name"] == "from-terraform"
     assert config["production"]["role_arn"].endswith("from-terraform")
     assert config["production"]["s3_bucket"] == "tf-bucket"
     assert config["production"]["environment_variables"]["NET_WORTH_HISTORY_BUCKET"] == "tf-bucket"

@@ -53,6 +53,7 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
         runtime="python3.11",
         slim_handler=True,
         use_precompiled_packages=False,
+        manage_roles=False,
         log_level="WARNING",
         ephemeral_storage={"Size": 3072},
         # API Gateway REST caps at 29 s; keep Lambda timeout aligned.
@@ -65,7 +66,9 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
     bucket = environment.get("TF_S3_BUCKET", "").strip() or stage_config.get("s3_bucket", "")
     if not role_arn or not bucket:
         raise ValueError("Zappa role_arn and s3_bucket must be configured")
+    stage_config["manage_roles"] = False
     stage_config["role_arn"] = role_arn
+    stage_config["role_name"] = role_arn.split("/")[-1]
     stage_config["s3_bucket"] = bucket
 
     layer_arns = environment.get("LAMBDA_LAYER_ARNS", "").strip()

@@ -4,6 +4,8 @@
     "app_function": "finance_dashboard.wsgi_lambda.application",
     "aws_region": "ap-south-1",
     "s3_bucket": "finance-dash-zappa-prod",
+    "manage_roles": false,
+    "role_name": "finance-dash-lambda-prod",
     "role_arn": "arn:aws:iam::875636131680:role/finance-dash-lambda-prod",
     "runtime": "python3.11",
     "timeout_seconds": 30,
