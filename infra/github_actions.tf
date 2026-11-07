@@ -104,7 +104,7 @@ data "aws_iam_policy_document" "github_actions_deploy" {
     condition {
       test     = "StringEquals"
       variable = "iam:PassedToService"
-      values   = ["lambda.amazonaws.com"]
+      values   = ["lambda.amazonaws.com", "apigateway.amazonaws.com"]
     }
   }
 
