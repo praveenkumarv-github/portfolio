@@ -102,10 +102,19 @@ data "aws_iam_policy_document" "lambda_net_worth" {
   }
 
   statement {
-    sid       = "ReadWriteNetWorthHistory"
+    sid       = "WriteNetWorthHistory"
     effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:PutObject"]
+    actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.deploy.arn}/net-worth/history/*"]
+  }
+
+  statement {
+    sid     = "ReadDeployBucketArtifactsAndHistory"
+    effect  = "Allow"
+    actions = ["s3:GetObject"]
+    resources = [
+      "${aws_s3_bucket.deploy.arn}/*"
+    ]
   }
 }
 
