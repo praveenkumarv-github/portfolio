@@ -68,6 +68,9 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:DeletePolicy",
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
+      "iam:CreatePolicyVersion",
+      "iam:DeletePolicyVersion",
+      "iam:SetDefaultPolicyVersion",
       "iam:ListPolicyVersions",          # Added to prevent destruction errors
       "iam:ListInstanceProfilesForRole", # Added to prevent destruction errors
       "iam:ListAttachedRolePolicies",
