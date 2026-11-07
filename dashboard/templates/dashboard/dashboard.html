@@ -169,7 +169,7 @@ input[type=url]{width:360px;max-width:100%}
 .rightpane::before{content:'';position:absolute;width:150px;height:150px;left:-40px;bottom:-50px;background:radial-gradient(circle,var(--orb1),transparent 68%);opacity:.5;pointer-events:none}
 .card-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;margin-bottom:12px}
 
-.compare-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+.compare-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
 @media(max-width:1150px){.compare-grid{grid-template-columns:1fr}}
 .card{background:var(--panel-glass);backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:var(--shadow);transition:all .25s ease;position:relative;overflow:hidden}
 .card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
@@ -191,11 +191,11 @@ input[type=url]{width:360px;max-width:100%}
 .range-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(9,105,218,.30)}
 
 .compact-table{display:flex;flex-direction:column;gap:6px}
-.trend-container{display:flex;flex-direction:column;height:100%}
+.trend-container{display:flex;flex-direction:column;min-width:0}
 .trend-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
-.trend-stats.compact{display:flex;justify-content:space-between;padding:10px 12px;background:var(--bg-alt);border-radius:10px;margin-bottom:12px;border-left:3px solid var(--accent)}
+.trend-stats.compact{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:10px 12px;background:var(--bg-alt);border-radius:10px;margin-bottom:12px;border-left:3px solid var(--accent)}
 .trend-stat-box{background:linear-gradient(135deg,var(--panel-alt) 0%,var(--panel) 100%);border:1px solid var(--line);border-radius:10px;padding:9px 11px;transition:all .2s ease}
-.trend-stat-box.mini{display:flex;align-items:baseline;gap:8px;background:none;border:none;padding:0}
+.trend-stat-box.mini{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;max-width:100%;background:none;border:none;padding:0}
 .trend-stat-box.mini .trend-stat-label{font-size:0.8rem;color:var(--text-muted)}
 .trend-stat-box.mini .trend-stat-value{font-size:1.1rem;font-weight:600}
 .trend-stat-label{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.9px;font-weight:700;margin-bottom:4px}
@@ -207,8 +207,8 @@ input[type=url]{width:360px;max-width:100%}
 .trend-stat-delta.down{color:var(--bad)}
 .trend-stat-delta .arrow{font-size:8px}
 
-.chart-wrapper{position:relative;background:linear-gradient(135deg,var(--panel-alt) 0%,var(--panel) 100%);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px}
-.chart-wrapper canvas{display:block}
+.chart-wrapper{position:relative;background:linear-gradient(135deg,var(--panel-alt) 0%,var(--panel) 100%);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:0;height:420px}
+.chart-wrapper canvas{display:block;width:100%!important;height:100%!important}
 .chart-empty-state{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted2);font-size:11px;opacity:.5}
 .insight-tag{margin-top:8px;padding:8px 11px;background:linear-gradient(135deg,rgba(26,127,55,.08) 0%,rgba(124,58,237,.05) 100%);border-left:3px solid var(--ok);border-radius:8px;font-size:10px;color:var(--txt);line-height:1.4;display:flex;align-items:flex-start;gap:6px}
 .insight-tag .icon{font-size:11px;margin-top:1px;flex-shrink:0;opacity:.8}
@@ -532,11 +532,75 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
         <div class="sub"><span class="chip">🛡 Insurance excluded</span><span class="chip">📦 {{ portfolio.categories|length }} categories</span></div>
       </div>
 
-      <div class="asset-table">
-        <div class="asset-row h"><div>Category</div><div class="v">Value</div><div class="p">%</div></div>
-        {% for cat in portfolio.categories %}
-        <div class="asset-row" onclick="toggleBlade('blade-{{ cat.key }}')"><div><div class="n">{{ cat.label }}</div><div class="m">{{ cat.meta }}</div></div><div class="v">₹{{ cat.value|floatformat:0 }}</div><div class="p">{{ cat.pct|floatformat:1 }}</div></div>
-        {% endfor %}
+      <div class="card reveal">
+        <div class="card-header">
+          <span class="card-title">Portfolio Distribution</span>
+          <div class="card-stats">
+            {% if portfolio.category_comparison_meta.largest %}<span class="stat-pill highlighted"><span class="icon">●</span><span class="val">{{ portfolio.category_comparison_meta.largest.pct|floatformat:1 }}%</span> Top</span>{% endif %}
+            {% if portfolio.category_comparison_meta.underweight %}<span class="stat-pill warn"><span class="icon">▼</span><span class="val">{{ portfolio.category_comparison_meta.underweight.pct|floatformat:1 }}%</span> Low</span>{% endif %}
+          </div>
+        </div>
+        <div class="portfolio-blocks">
+          {% for cat in portfolio.categories %}
+          <div class="pb-row {% if cat.key == 'mutual_funds' %}pb-row-mf{% elif cat.key == 'retirement' %}pb-row-ret{% elif cat.key == 'liquid' %}pb-row-liq{% elif cat.key == 'emergency_fund' %}pb-row-ef{% elif cat.key == 'metals' %}pb-row-met{% endif %} {% if cat.pct > 30 %}pb-row-large{% elif cat.pct > 15 %}pb-row-medium{% else %}pb-row-small{% endif %}">
+            <div class="pb-content">
+              <span class="pb-label">{{ cat.label }}</span>
+              <div class="pb-track">
+                {% if cat.key == 'mutual_funds' %}
+                <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                  {% for f in portfolio.mutual_funds %}
+                  <div class="pb-segment seg-mf-{% cycle '1' '2' '3' '4' '5' '6' '7' '8' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ f.pct }}%" data-tip="{{ f.fund_name }} · {{ f.pct|floatformat:1 }}%">
+                  </div>
+                  {% endfor %}
+                </div>
+                {% elif cat.key == 'retirement' %}
+                <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                  {% for item in portfolio.retirement_split %}
+                  <div class="pb-segment seg-ret-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                    {% if item.pct >= 20 %}<span class="pb-segment-label">{{ item.type|truncatechars:12 }}</span>{% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% elif cat.key == 'liquid' %}
+                <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                  {% for item in portfolio.liquid_split %}
+                  <div class="pb-segment seg-liq-{% cycle '1' '2' '3' '4' '5' '6' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                    {% if item.pct >= 18 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% elif cat.key == 'emergency_fund' %}
+                <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                  {% for item in portfolio.emergency_fund_split %}
+                  <div class="pb-segment seg-ef-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                    {% if item.pct >= 24 %}<span class="pb-segment-label">{{ item.type|truncatechars:11 }}</span>{% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% elif cat.key == 'metals' %}
+                <div class="pb-track-stack" style="width:{{ cat.pct }}%">
+                  {% for item in portfolio.metals_split %}
+                  <div class="pb-segment seg-met-{% cycle '1' '2' '3' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
+                    {% if item.pct >= 28 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% else %}
+                <div class="pb-track-fill" style="width:{{ cat.pct }}%"></div>
+                {% endif %}
+              </div>
+              <div class="pb-meta">
+                <span class="pb-value">₹{{ cat.value|floatformat:0 }}</span>
+                <span class="pb-pct">{{ cat.pct|floatformat:1 }}%</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="insight-tag">
+          <span class="icon">💡</span>
+          <span>{{ portfolio.category_comparison_meta.largest.label|default:'Top allocation' }} dominates at {{ portfolio.category_comparison_meta.largest.pct|default:'0'|floatformat:1 }}%. Monitor for overconcentration risk.</span>
+        </div>
       </div>
 
       <div class="risk">
@@ -559,78 +623,16 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
   <section class="compare-grid">
     <div class="card reveal">
       <div class="card-header">
-        <span class="card-title">Portfolio Distribution</span>
-        <div class="card-stats">
-          {% if portfolio.category_comparison_meta.largest %}<span class="stat-pill highlighted"><span class="icon">●</span><span class="val">{{ portfolio.category_comparison_meta.largest.pct|floatformat:1 }}%</span> Top</span>{% endif %}
-          {% if portfolio.category_comparison_meta.underweight %}<span class="stat-pill warn"><span class="icon">▼</span><span class="val">{{ portfolio.category_comparison_meta.underweight.pct|floatformat:1 }}%</span> Low</span>{% endif %}
-        </div>
-      </div>
-      <div class="portfolio-blocks">
-        {% for cat in portfolio.categories %}
-        <div class="pb-row {% if cat.key == 'mutual_funds' %}pb-row-mf{% elif cat.key == 'retirement' %}pb-row-ret{% elif cat.key == 'liquid' %}pb-row-liq{% elif cat.key == 'emergency_fund' %}pb-row-ef{% elif cat.key == 'metals' %}pb-row-met{% endif %} {% if cat.pct > 30 %}pb-row-large{% elif cat.pct > 15 %}pb-row-medium{% else %}pb-row-small{% endif %}">
-          <div class="pb-content">
-            <span class="pb-label">{{ cat.label }}</span>
-            <div class="pb-track">
-              {% if cat.key == 'mutual_funds' %}
-              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
-                {% for f in portfolio.mutual_funds %}
-                <div class="pb-segment seg-mf-{% cycle '1' '2' '3' '4' '5' '6' '7' '8' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ f.pct }}%" data-tip="{{ f.fund_name }} · {{ f.pct|floatformat:1 }}%">
-                </div>
-                {% endfor %}
-              </div>
-              {% elif cat.key == 'retirement' %}
-              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
-                {% for item in portfolio.retirement_split %}
-                <div class="pb-segment seg-ret-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
-                  {% if item.pct >= 20 %}<span class="pb-segment-label">{{ item.type|truncatechars:12 }}</span>{% endif %}
-                </div>
-                {% endfor %}
-              </div>
-              {% elif cat.key == 'liquid' %}
-              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
-                {% for item in portfolio.liquid_split %}
-                <div class="pb-segment seg-liq-{% cycle '1' '2' '3' '4' '5' '6' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
-                  {% if item.pct >= 18 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
-                </div>
-                {% endfor %}
-              </div>
-              {% elif cat.key == 'emergency_fund' %}
-              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
-                {% for item in portfolio.emergency_fund_split %}
-                <div class="pb-segment seg-ef-{% cycle '1' '2' '3' '4' '5' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
-                  {% if item.pct >= 24 %}<span class="pb-segment-label">{{ item.type|truncatechars:11 }}</span>{% endif %}
-                </div>
-                {% endfor %}
-              </div>
-              {% elif cat.key == 'metals' %}
-              <div class="pb-track-stack" style="width:{{ cat.pct }}%">
-                {% for item in portfolio.metals_split %}
-                <div class="pb-segment seg-met-{% cycle '1' '2' '3' %} {% if forloop.first %}tip-left{% elif forloop.last %}tip-right{% endif %}" style="width:{{ item.pct }}%" data-tip="{{ item.type }} · {{ item.pct|floatformat:1 }}%">
-                  {% if item.pct >= 28 %}<span class="pb-segment-label">{{ item.type }}</span>{% endif %}
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="pb-track-fill" style="width:{{ cat.pct }}%"></div>
-              {% endif %}
-            </div>
-            <div class="pb-meta">
-              <span class="pb-value">₹{{ cat.value|floatformat:0 }}</span>
-              <span class="pb-pct">{{ cat.pct|floatformat:1 }}%</span>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      <div class="insight-tag">
-        <span class="icon">💡</span>
-        <span>{{ portfolio.category_comparison_meta.largest.label|default:'Top allocation' }} dominates at {{ portfolio.category_comparison_meta.largest.pct|default:'0'|floatformat:1 }}%. Monitor for overconcentration risk.</span>
-      </div>
-    </div>
-    <div class="card reveal">
-      <div class="card-header">
         <span class="card-title">Net Worth Trend</span>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          {% if net_worth_history_enabled %}
+          {% if net_worth_demo %}<span class="card-meta">Demo data (sample values)</span><a class="btn" href="{% url 'dashboard' %}">Actual History</a>{% endif %}
+          <form method="post" action="{% url 'update_net_worth' %}" class="action-form">
+            {% csrf_token %}
+            <button type="submit" class="btn" name="action" value="update">Update Net Worth</button>
+            {% if local_net_worth_history and not net_worth_s3_history %}<button type="submit" class="btn" name="action" value="demo">Load Demo Year</button>{% endif %}
+          </form>
+          {% endif %}
           <div class="range-filter" id="range-filter" role="group" aria-label="Trend date range">
             <button type="button" class="range-btn" data-range="3">3M</button>
             <button type="button" class="range-btn" data-range="6">6M</button>
@@ -654,7 +656,7 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
           </div>
         </div>
         <div class="chart-wrapper">
-          <canvas id="trendChart" height="180"></canvas>
+          <canvas id="trendChart" height="420"></canvas>
           <div class="chart-empty-state" id="trend-empty" style="display:none">
             📈 Add more snapshots to visualize trend
           </div>
@@ -861,7 +863,7 @@ details[open]>.ea-summary .ea-label::before{content:'▾ '}
 **Net Worth (Asset Only): ₹{{ portfolio.net_worth|floatformat:0 }}**  _(Insurance excluded)_
 
 ## Allocation
-| Category | Value | % |
+| Portfolio Distribution | Value | % |
 | --- | ---: | ---: |
 {% for cat in portfolio.categories %}| {{ cat.label }} | ₹{{ cat.value|floatformat:0 }} | {{ cat.pct|floatformat:1 }} |
 {% endfor %}
@@ -997,6 +999,11 @@ function exportPDF(){
 }
 
 /* ===== Export: Excel (CSV) ===== */
+function csvCell(value){
+  var text=String(value).trim();
+  if(/^[=+\-@]/.test(text))text="'"+text;
+  return '"'+text.replace(/"/g,'""')+'"';
+}
 function exportExcel(){
   var pre=document.getElementById('portfolio-md');
   if(!pre){alert('Nothing to export.');return;}
@@ -1007,8 +1014,7 @@ function exportExcel(){
     if(/^\|[\s:*-]+\|/.test(line))return;
     var cells=line.split('|').slice(1,-1).map(function(c){
       c=c.replace(/\*\*/g,'').replace(/₹/g,'').trim();
-      if(/[",\n]/.test(c))c='"'+c.replace(/"/g,'""')+'"';
-      return c;
+      return csvCell(c);
     });
     if(cells.length)rows.push(cells.join(','));
   });
@@ -1167,7 +1173,7 @@ function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){
   const latest=vals[vals.length-1],oldest=vals[0],previous=vals[vals.length-2];
   const totalChange=latest-oldest,totalPct=oldest>0?((totalChange/oldest)*100):0;
   const recentChange=latest-previous,recentPct=previous>0?((recentChange/previous)*100):0;
-  if(periodEl)periodEl.textContent=snaps[0].month+' \u2192 '+snaps[snaps.length-1].month;
+  if(periodEl)periodEl.textContent=(snaps[0].date||snaps[0].month)+' \u2192 '+(snaps[snaps.length-1].date||snaps[snaps.length-1].month);
   grid.style.display='flex';
   const changeEl=document.getElementById('nw-change');
   changeEl.textContent=inr(Math.abs(totalChange));
@@ -1192,7 +1198,7 @@ function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){
   if(!el)return;
   trendChart=new Chart(el,{
    type:'line',
-   data:{labels:snaps.map(s=>s.month),datasets:[{label:'Net Worth',data:snaps.map(s=>s.total_net_worth),borderColor:'#7c3aed',
+  data:{labels:snaps.map(s=>s.date||s.month),datasets:[{label:'{% if net_worth_demo %}Demo Net Worth{% else %}Net Worth{% endif %}',data:snaps.map(s=>s.total_net_worth),borderColor:'#7c3aed',
      backgroundColor:function(ctx){const chart=ctx.chart;const{ctx:cc,chartArea}=chart;if(!chartArea)return'rgba(124,58,237,.05)';const g=cc.createLinearGradient(0,chartArea.bottom,0,chartArea.top);g.addColorStop(0,'rgba(14,165,233,.02)');g.addColorStop(.5,'rgba(124,58,237,.08)');g.addColorStop(1,'rgba(124,58,237,.16)');return g;},
      fill:true,tension:.35,borderWidth:2.5,pointRadius:snaps.length<=8?2.5:0,pointBackgroundColor:'#7c3aed',pointBorderColor:'#ffffff',pointBorderWidth:1.5,pointHoverRadius:5,pointHoverBackgroundColor:'#0ea5e9',pointHoverBorderColor:'#ffffff',pointHoverBorderWidth:2.5,
      segment:{borderColor:function(ctx){return ctx.p1.parsed.y>=ctx.p0.parsed.y?'#1a7f37':'#cf222e';}}}]},
@@ -1209,7 +1215,18 @@ function mkDoughnut(id,labels,values,colours,responsive=true,h=260,plugins=[]){
 
  function applyRange(range){
   let snaps=snapsAll;
-  if(range!=='all'){const n=parseInt(range,10);if(!isNaN(n)&&snapsAll.length>n)snaps=snapsAll.slice(-n);}
+  if(range!=='all'&&snapsAll.length){
+   const months=parseInt(range,10);
+   if(!isNaN(months)){
+    const last=snapsAll[snapsAll.length-1];
+    const end=new Date((last.date||last.month+'-01')+'T00:00:00Z');
+    const cutoff=new Date(Date.UTC(end.getUTCFullYear(),end.getUTCMonth()-months,1));
+    const lastDay=new Date(Date.UTC(cutoff.getUTCFullYear(),cutoff.getUTCMonth()+1,0)).getUTCDate();
+    cutoff.setUTCDate(Math.min(end.getUTCDate(),lastDay));
+    const start=cutoff.toISOString().slice(0,10);
+    snaps=snapsAll.filter(snapshot=>(snapshot.date||snapshot.month+'-01')>=start);
+   }
+  }
   computeStats(snaps);buildTrend(snaps);
  }
 

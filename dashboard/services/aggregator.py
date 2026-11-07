@@ -63,8 +63,8 @@ def _build_payload(file_path: str) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "portfolio": None,
         "alerts": [],
-        "errors": result.get("errors", []),
-        "warnings": result.get("warnings", []),
+        "errors": list(result.get("errors", [])),
+        "warnings": list(result.get("warnings", [])),
         "snapshots": [],
         "raw_data": result.get("data", {}),
         "economic_allocation": None,
@@ -97,7 +97,8 @@ def _build_payload(file_path: str) -> Dict[str, Any]:
         payload["warnings"].append(f"Economic allocation engine failed: {exc}")
 
     try:
-        _capture_snapshot(portfolio)
+        if not payload["errors"]:
+            _capture_snapshot(portfolio)
         payload["snapshots"] = list(
             NetWorthSnapshot.objects.values(
                 "month",

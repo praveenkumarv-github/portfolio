@@ -5,5 +5,6 @@ urlpatterns = [
     path('', views.dashboard_view, name='dashboard'),
     path('load-google-sheet/', views.load_google_sheet, name='load_google_sheet'),
     path('upload/', views.upload_file, name='upload_file'),
+    path('net-worth/', views.update_net_worth, name='update_net_worth'),
     path('metal-prices/', views.update_metal_prices, name='update_metal_prices'),
 ]

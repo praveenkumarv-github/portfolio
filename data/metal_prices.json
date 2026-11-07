@@ -1,13 +1,13 @@
 {
   "gold": {
-    "price": 15442.0,
-    "timestamp": "2026-09-11",
+    "price": 13888.0,
+    "timestamp": "2026-10-31",
     "source": "live",
     "manual": false
   },
   "silver": {
-    "price": 245.0,
-    "timestamp": "2026-09-11",
+    "price": 200.0,
+    "timestamp": "2026-10-31",
     "source": "live",
     "manual": false
   }

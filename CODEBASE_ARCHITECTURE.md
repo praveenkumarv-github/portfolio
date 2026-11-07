@@ -2,7 +2,9 @@
 
 ## Quick Navigation
 
-This guide explains the structure of the portfolio dashboard codebase and how the new XIRR and Economic Allocation features integrate.
+Reviewed **2026-10-31**. This guide maps current source ownership, financial
+analytics, storage, and UI integration. Verification results are recorded in
+[DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md).
 
 ---
 
@@ -12,37 +14,43 @@ This guide explains the structure of the portfolio dashboard codebase and how th
 portfolio/
 ├── dashboard/                          # Main Django app
 │   ├── services/
-│   │   ├── xirr.py                    # ⭐ XIRR solver (NEW)
-│   │   ├── economic_allocation.py     # ⭐ Economic allocation (NEW)
-│   │   ├── excel_parser.py            # Sheet parsing (UPDATED: +3 new sheets)
-│   │   ├── calculation_engine.py      # Portfolio analytics (UPDATED: +transaction analytics)
-│   │   ├── validators.py              # Data validation (UPDATED: +MFTransactions check)
-│   │   ├── aggregator.py              # Orchestration (UPDATED: +EA integration)
+│   │   ├── xirr.py                    # Bounded XIRR solver
+│   │   ├── capital_gains.py           # FIFO lots and remaining cost basis
+│   │   ├── economic_allocation.py     # Economic look-through allocation
+│   │   ├── excel_parser.py            # Six required and three optional sheets
+│   │   ├── calculation_engine.py      # Portfolio and transaction analytics
+│   │   ├── validators.py              # Reconciliation and finite-value checks
+│   │   ├── aggregator.py              # Payload cache and monthly snapshots
+│   │   ├── net_worth_history.py       # Daily local CSV/S3 history and local demo
+│   │   ├── workbook_validation.py     # XLSX size and ZIP structure checks
 │   │   ├── alerts.py                  # Risk coverage alerts
 │   │   ├── nav_service.py             # AMFI/MFAPI NAV resolution
 │   │   ├── metal_price_service.py     # Metal price fetching
 │   │   ├── google_sheet_service.py    # Google Sheets integration
 │   │   ├── url_utils.py               # URL parsing helpers
 │   │   └── __init__.py
-│   ├── views.py                        # Django view (UPDATED: +EA context)
-│   ├── models.py                       # (Not used; ephemeral SQLite)
+│   ├── views.py                        # Workbook actions, rendering, daily save
+│   ├── models.py                       # UploadedFile and NetWorthSnapshot
 │   ├── urls.py
 │   ├── admin.py
 │   ├── apps.py
-│   ├── migrations/                     # Database migrations (frozen)
+│   ├── migrations/                     # Initial schema and monthly snapshot model
 │   ├── templates/
 │   │   └── dashboard/
-│   │       └── dashboard.html          # UI template (UPDATED: +MF blade, +EA blade)
+│   │       └── dashboard.html          # Self-contained UI with inline CSS/JS
 │   ├── static/
 │   │   └── dashboard/
-│   │       └── dashboard.css           # Styling
+│   │       └── dashboard.css           # Legacy file, not linked by template
 │   └── __init__.py
 ├── tests/
-│   ├── test_xirr.py                   # ⭐ XIRR tests (NEW)
-│   ├── test_economic_allocation.py    # ⭐ EA tests (NEW)
-│   ├── test_calculation_engine.py     # Engine tests (UPDATED: +transaction analytics)
-│   ├── test_excel_parser.py           # Parser tests (UPDATED: +optional sheets)
-│   ├── test_validators.py             # Validator tests (UPDATED)
+│   ├── test_xirr.py                   # Solver and invalid-input boundaries
+│   ├── test_economic_allocation.py    # Allocation defaults and overrides
+│   ├── test_calculation_engine.py     # Core and transaction analytics
+│   ├── test_capital_gains.py          # FIFO remaining costs and holding periods
+│   ├── test_net_worth_history.py      # Local CSV and stubbed S3
+│   ├── test_dashboard_ui.py           # Template and CSV export regression
+│   ├── test_excel_parser.py           # Workbook parsing
+│   ├── test_validators.py             # Data quality warnings
 │   ├── test_aggregator.py
 │   ├── test_views_security.py
 │   ├── test_nav_service.py
@@ -57,20 +65,20 @@ portfolio/
 │   └── ...
 ├── infra/                              # Terraform IaC
 │   ├── main.tf, backend.tf, ...
-│   └── domain/                         # ACM + custom domain
+│   └── domain/                         # Certificate validation and custom domain
 ├── scripts/                            # Utility scripts
-├── generate_sample_excel.py            # Sample workbook generator (UPDATED)
+├── generate_sample_excel.py            # Sample workbook generator
 ├── manage.py
 ├── requirements.txt
-├── README.md                           # Main docs (UPDATED)
-├── AI_CONTEXT.md                       # AI briefing (UPDATED)
-├── AI_FULL_REPO_PROMPT.md             # Full AI prompt (UPDATED)
-├── FEATURES_DETAILED.md               # ⭐ Feature guide (NEW)
-├── CHECKLIST.md                        # Setup checklist (UPDATED)
-├── DEPLOYMENT.md                       # Deployment guide (UPDATED)
-├── OPERATIONS.md                       # Operations guide (UPDATED)
+├── README.md                           # Main docs
+├── AI_CONTEXT.md                       # AI briefing
+├── AI_FULL_REPO_PROMPT.md               # Full AI prompt
+├── FEATURES_DETAILED.md                # Feature reference
+├── CHECKLIST.md                        # Setup checklist
+├── DEPLOYMENT.md                       # Deployment guide
+├── OPERATIONS.md                       # Operations guide
 ├── DASHBOARD_AUDIT.md                  # Dashboard audit notes
-└── db.sqlite3                          # Local SQLite (ephemeral)
+└── db.sqlite3                          # Local SQLite; Lambda uses ephemeral /tmp
 ```
 
 ---
@@ -83,18 +91,18 @@ User uploads XLSX or pastes Google Sheet URL
 [Excel Validator] (size, magic, structure)
          ↓
 [Parser: excel_parser.py]
-├─→ Required sheets (MutualFunds, Retirement, Liquid, Emergency, Insurance, Metals)
+├─→ Required sheets (MutualFunds, Retirement, Liquid, EmergencyFund, Insurance, Metals)
 ├─→ Optional sheets (MFTransactions, LookThrough, Targets)
-└─→ Returns: ParsedData object
+├─→ Resolves NAV and metal prices while parsing
+└─→ Returns: dictionary with rows, summaries, warnings and errors
          ↓
 [Aggregator: aggregator.py]
-├─→ [NAV Service] resolves mutual fund current values (AMFI → MFAPI → Symbol)
-├─→ [Metal Price Service] fetches prices (GoodReturns → cache → manual)
 ├─→ [Calculation Engine]
 │  ├─→ Per-fund analytics (from MFTransactions if present)
 │  │   • invested_amount, absolute_gain, absolute_return_pct
 │  │   • XIRR (via xirr.py solver)
 │  │   • first_investment_date, transaction list
+│  │   • remaining FIFO average cost and holding-period classifications
 │  └─→ Portfolio-level analytics (only tracked funds)
 │      • mf_analytics with pooled XIRR and gain
 ├─→ [Economic Allocation Engine]
@@ -111,6 +119,7 @@ User uploads XLSX or pastes Google Sheet URL
 [Views: views.py]
 ├─→ Pass PortfolioSummary (with mf_analytics) to template
 ├─→ Pass economic_allocation report to template
+├─→ Read daily CSV/S3 history outside the cached portfolio payload
 └─→ Render dashboard
          ↓
 [Template: dashboard.html]
@@ -129,11 +138,14 @@ User uploads XLSX or pastes Google Sheet URL
 └─→ Alerts and risk coverage
          ↓
 User sees interactive portfolio dashboard
+         ↓ explicit Update Net Worth POST
+[views.update_net_worth → net_worth_history.save_net_worth]
+└─→ Local CSV or one date-keyed JSON object in existing private S3 bucket
 ```
 
 ---
 
-## New Features: Integration Points
+## Integration Points
 
 ### 1. XIRR Solver (`dashboard/services/xirr.py`)
 
@@ -147,56 +159,64 @@ User sees interactive portfolio dashboard
 
 **Output:** Float (annualized return) or None
 
-**Tests:** `tests/test_xirr.py` (6 tests, no external dependencies)
+**Tests:** [tests/test_xirr.py](tests/test_xirr.py). The solver uses only stdlib.
+It sorts flows internally, guards invalid/same-day inputs, and searches within
+rate bounds -0.999 to 10.0. No result is represented by None, not zero.
 
 ### 2. Transaction Analytics (`dashboard/services/calculation_engine.py`)
 
-**New functions:**
+**Analytics helpers:**
 - `_fund_transaction_analytics()` — per-fund metrics from MFTransactions
 - `_portfolio_mf_analytics()` — portfolio-level rollup (only tracked funds)
 
 **Called by:**
-- `aggregator.py` → `_build_payload()` (line ~410-415)
+- `build_portfolio(data)`, invoked by aggregator `_build_payload()`.
 
-**Input:** MutualFunds list, MFTransactions dict, MFTransactions dict
+**Input:** Parsed data dictionary; MFTransactions is a flat list of ledger rows.
 
-**Output:** PortfolioSummary with new `mf_analytics` field
+**Output:** `PortfolioSummary` with per-fund and pooled analytics, FIFO remaining
+cost, and purchase-ledger valuation/grouping fields. Insurance is excluded.
 
-**Tests:** `tests/test_calculation_engine.py` (7 tests, +3 new)
+**Tests:** [tests/test_calculation_engine.py](tests/test_calculation_engine.py)
+and [tests/test_capital_gains.py](tests/test_capital_gains.py).
 
 ### 3. Economic Allocation Engine (`dashboard/services/economic_allocation.py`)
 
-**Standalone module:** Depends only on Python stdlib and `helpers`.
+**Standalone module:** Uses Python stdlib and the supplied portfolio object.
 
 **Entry point:** `build_economic_allocation(data, portfolio)` → comprehensive report
 
 **Called by:**
-- `aggregator.py` → `_build_payload()` (line ~91-95, defensive try/except)
+- `aggregator.py` → `_build_payload()` (defensive try/except)
 - Result added to payload: `payload['economic_allocation']`
 - Unclassified notes propagated to warnings
 
-**Input:** ParsedData object, PortfolioSummary object
+**Input:** Parsed dictionary, `PortfolioSummary` object
 
-**Output:** Dict with buckets, summary, equity style, targets, unclassified_notes
+**Output:** Dictionary with a bucket list, chart, equity-style list, top-level
+equity comparisons, unclassified notes, and presence flags. Targets/deviations
+are fields on bucket rows, not a separate targets dictionary.
 
-**Tests:** `tests/test_economic_allocation.py` (6 tests)
+**Tests:** [tests/test_economic_allocation.py](tests/test_economic_allocation.py).
 
 ### 4. Sheet Parsing (`dashboard/services/excel_parser.py`)
 
-**New parsers:**
-- `_parse_mf_transactions()` → dict[identifier, list[txn]]
-- `_parse_lookthrough()` → dict[key, mix_dict]
+**Optional parsers:**
+- `_parse_mf_transactions()` → list[txn] with an identifier on each row
+- `_parse_lookthrough()` → list[override] with a key on each row
 - `_parse_targets()` → dict[asset_class, target_pct]
 
-**Called by:** `load()` method (line ~142)
+**Called by:** `ExcelParser.load()`
 
 **Backward compatible:** Missing sheets default to empty collections
 
-**Tests:** `tests/test_excel_parser.py` (19 tests, +5 new)
+**Tests:** [tests/test_excel_parser.py](tests/test_excel_parser.py).
+MFTransactions accepts preferred Scheme Name/Transaction Type or legacy
+FundIdentifier/Type columns. Invalid numeric/date/type/name rows warn and skip.
 
 ### 5. Validation (`dashboard/services/validators.py`)
 
-**New check:** MFTransactions units reconciliation
+**Checks:** MFTransactions units reconciliation and recursive finite-value guards
 
 **Function:** `validate_portfolio_data(data)` checks:
 - For each fund with MFTransactions:
@@ -206,43 +226,42 @@ User sees interactive portfolio dashboard
 
 **Called by:** `aggregator.py` (warnings collected and returned to UI)
 
-**Tests:** `tests/test_validators.py` (4 tests)
+`require_finite_values` rejects non-finite numeric input before portfolio output.
+**Tests:** [tests/test_validators.py](tests/test_validators.py) and
+[tests/test_hardening.py](tests/test_hardening.py).
 
 ### 6. Aggregation and Orchestration (`dashboard/services/aggregator.py`)
 
-**Updates:**
-- Import: `from .economic_allocation import build_economic_allocation`
-- Payload: added `"economic_allocation": None` field (line ~50)
-- In `_build_payload()` (line ~91-95):
-  ```python
-  try:
-      economic_allocation = build_economic_allocation(data, portfolio)
-      payload["economic_allocation"] = economic_allocation
-      payload["warnings"].extend(economic_allocation.get("unclassified_notes", []))
-  except Exception as exc:
-      payload["warnings"].append(f"Economic allocation engine failed: {exc}")
-  ```
+`build_dashboard_context` caches a payload by workbook path/mtime. `_build_payload`
+parses, validates, builds the portfolio, alerts, and economic allocation. Error
+and warning lists are copied. The monthly `NetWorthSnapshot` write runs only
+without parser errors, preserving the previous snapshot on partial input.
 
-**Defensive:** Catches exceptions and adds warnings (not fatal)
+Economic allocation failure produces a warning; daily history I/O belongs to the
+view/service boundary and is not included in this cached payload.
 
 ### 7. View and Context (`dashboard/views.py`)
 
-**Updates:**
-- Line ~78: added `"economic_allocation": None` to context
+`dashboard_view` obtains the portfolio payload and reads CSV/S3 history on each
+render. It copies errors before adding storage failures to avoid mutating the
+cache. A loaded workbook is still required, including after a Lambda cold start.
 
-**Called by:** `dashboard.html` template
+`update_net_worth` is POST-only and CSRF-protected. It derives the amount from the
+loaded portfolio, rejects parser errors, and reports write success only after
+storage succeeds. It does not reload the original Google Sheet automatically.
 
-**Tests:** `tests/test_views_security.py` (existing, unchanged)
+Tests live in [tests/test_views_security.py](tests/test_views_security.py) and
+[tests/test_net_worth_history.py](tests/test_net_worth_history.py).
 
 ### 8. Template (`dashboard/templates/dashboard/dashboard.html`)
 
-**MF Blade updates (lines ~639–700):**
+**MF Blade:**
 - Per-fund columns: Invested, Gain, XIRR, %
 - Portfolio summary card: invested, current (tracked), gain, portfolio XIRR
 - Transaction history disclosure: Date, Type, Units, NAV, Amount
 - Fallback: "–" for untracked funds, footer note
 
-**Economic Allocation Blade (lines ~687–758):**
+**Economic Allocation Blade:**
 - Doughnut chart (6 buckets)
 - Summary panel (label vs effective equity, hidden exposure)
 - Bucket table (value, current %, target %, deviation)
@@ -250,7 +269,7 @@ User sees interactive portfolio dashboard
 - Equity style breakdown (if present)
 - Conditional notes (no sheet found, etc.)
 
-**CSS additions (lines ~255–272):**
+**Inline CSS:**
 - `.gain-pos`, `.gain-neg`, `.muted` — color coding
 - `.mf-summary`, `.mf-summary-row` — flex layouts
 - `.txn-row`, `.txn-table` — transaction table
@@ -261,67 +280,40 @@ User sees interactive portfolio dashboard
 - `mkDoughnut()` called with economic-alloc chart data
 - `toggleBlade()` for disclosure toggle
 - Chart initialization (Chart.js CDN)
+- Theme toggle, print/PDF and CSV export; CSV cells neutralize formula prefixes.
+- Trend ranges use dates, not row counts, with stable full-width canvas sizing.
+
+### 9. Daily History (`dashboard/services/net_worth_history.py`)
+
+- Local localhost Excel mode writes `cache/net_worth.csv` atomically and uses the
+   computer date. Demo writes a separate `cache/net_worth_demo.csv` only locally.
+- `NET_WORTH_HISTORY_BUCKET` selects S3 mode for Excel and Google Sheets. Keys
+   are `net-worth/history/YYYY-MM-DD.json`, using Django's configured time zone.
+- S3 reads paginate and validate records. Same-day saves replace the current
+   value; different dates use independent keys. No silent fallback on S3 errors.
+- Terraform versions the existing private artifact bucket and grants Lambda only
+   prefix-scoped listing/GetObject/PutObject. The patcher derives the history
+   bucket from the same bucket selected for Zappa deployment.
+- History is shared per deployment. SQLite monthly snapshots are not migrated.
 
 ---
 
 ## Feature Interaction: Concrete Example
 
-**Scenario:** User uploads workbook with:
-- MutualFunds: Axis Equity (500 units, current NAV 168.31)
-- MFTransactions: 12 monthly SIPs × 50.52 units each
-- LookThrough: Axis = 100% Equity
-- Targets: Equity 55%
+Assume the only positive holding is 100 units of Fund A with current NAV INR 12.
+Its ledger contains a purchase of 100 units at NAV INR 10, Amount INR 1,000.
 
-**Processing:**
-
-1. **Parser reads sheets:**
-   - MutualFunds: 500 units
-   - MFTransactions: 12 entries (606.24 net units invested)
-   - LookThrough: Axis = {Equity: 100}
-   - Targets: {Equity: 55}
-
-2. **NAV resolution:**
-   - Current NAV = 168.31 (via AMFI)
-   - Current value = 500 × 168.31 = €84,155
-
-3. **Per-fund transaction analytics:**
-   - invested_amount = 50.52 × 12 = 606.24 units × avg NAV ~157 = €95,118
-   - current_value = 500 × 168.31 = €84,155
-   - absolute_gain = 84,155 - 95,118 = (negative, wait... let me reconsider)
-   - Actually: if we're tracking 606.24 units NET invested, and we have 500 units now, that means some were redeemed or it's a loss
-   - More realistic: invested_amount (via sum of transaction amounts) might be 95,684
-   - current_value = 500 × 168.31 = 84,155 (hmm, this is a loss)
-   - OR: the 500 units is AFTER accounting for all transactions (input units on MutualFunds sheet)
-   - XIRR on these cashflows (12 monthly invests + current value) = solver output
-
-4. **Economic allocation:**
-   - Axis: 84,155 × 100% Equity = €84,155 to Equity bucket
-   - Total portfolio: €84,155
-   - Equity: 84,155 (100%)
-   - Effective equity: 100%
-   - Naive equity: 100% (already labeled Equity)
-   - Hidden equity: 0% (no hidden exposure)
-   - Target deviation: Equity current 100% - target 55% = +45 percentage points (significant overweight)
-
-5. **MFTransactions reconciliation:**
-   - Net units from ledger: 606.24 (sum of Invested) - 0 (no Redeemed)
-   - Declared units: 500
-   - Mismatch: 606.24 vs 500 = 106.24 units (17.6% off!)
-   - ❌ Warning: "MFTransactions for 'Axis Equity Direct' do not match declared units"
-
-6. **UI rendering:**
-   - MF Blade:
-     - Invested: computed from MFTransactions
-     - Gain: current_value - invested_amount
-     - XIRR: solver output
-     - % (return): (gain / invested) × 100
-     - Transaction history: all 12 SIPs listed with Date, Type, Units, NAV, Amount
-   - Economic Allocation Blade:
-     - Doughnut: 100% Equity (solid blue)
-     - Summary: "Label Equity: 100%, Effective Equity: 100%, Hidden: 0 pts"
-     - Bucket table: Equity, €84,155, 100%, 55%, +45 pts
-     - Contributors: "Axis Equity Direct, €84,155, 100%, 100% Equity, default"
-     - Targets: "Equity 100% vs target 55% → +45 pts OVERWEIGHT"
+1. The parser resolves Scheme Name to Identifier and reads the dated purchase.
+2. The engine computes value INR 1,200, net investment INR 1,000, gain INR 200,
+   absolute return 20%, and remaining FIFO average cost INR 10.
+3. XIRR uses the dated investment plus today's INR 1,200 value. The rate depends
+   on elapsed time and is not necessarily 20%.
+4. An explicit 100% Equity override allocates INR 1,200 to Equity. A 55% Equity
+   target produces +45 percentage points deviation.
+5. Ledger net units 100 match declared units 100. Missing units would warn;
+   a market price decrease alone does not reduce unit count.
+6. Explicit Update Net Worth saves today's INR 1,200. A later same-day valuation
+   of INR 1,100 replaces that day's value, not just its maximum.
 
 ---
 
@@ -331,14 +323,12 @@ User sees interactive portfolio dashboard
 
 ```
 tests/
-├── test_xirr.py                        (6 tests, 100% coverage)
-├── test_economic_allocation.py         (6 tests, 100% coverage)
-├── test_calculation_engine.py          (7 tests, incl. 3 new for transaction analytics)
-├── test_excel_parser.py                (19 tests, incl. 5 new for optional sheets)
-├── test_validators.py                  (4 tests)
-├── test_aggregator.py                  (existing, unchanged)
-├── test_views_security.py              (existing, unchanged)
-└── ...other tests...
+├── test_xirr.py, test_calculation_engine.py, test_capital_gains.py
+├── test_economic_allocation.py, test_excel_parser.py, test_validators.py
+├── test_net_worth_history.py, test_dashboard_ui.py, test_aggregator.py
+├── test_hardening.py, test_views_security.py, test_workbook_validation.py
+├── test_patch_zappa_settings.py, test_lambda_runtime.py
+└── ...service, authentication, and DNS tests...
 ```
 
 ### Running Tests
@@ -347,22 +337,22 @@ tests/
 # All tests
 pytest tests/ -v --tb=short
 
-# Only new features
+# Focused analytics tests
 pytest tests/test_xirr.py tests/test_economic_allocation.py tests/test_validators.py -v
 
-# With coverage
+# Optional coverage run, requires pytest-cov
 pytest tests/ --cov=dashboard/services --cov-report=term-missing --cov-report=html
 
 # Single test
-pytest tests/test_economic_allocation.py::test_hidden_equity_exposure_via_epf -v
+pytest tests/test_economic_allocation.py -k hidden_equity -v
 ```
 
-### Expected Results
+### Verification Scope
 
-- All 143 tests passing
-- Coverage: 99%+ on new modules
-- No warnings or deprecations
-- Django system check: 0 issues
+Use the dated record in [DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md).
+No coverage percentage is claimed. S3 and cleanup tests use stubs, not real AWS.
+CSV JavaScript tests require Node. Local Python 3.14 results do not replace the
+target Python 3.11 Ubuntu/Lambda validation workflow or production checks.
 
 ---
 
@@ -370,22 +360,22 @@ pytest tests/test_economic_allocation.py::test_hidden_equity_exposure_via_epf -v
 
 ### Adding a New Asset Class to Economic Allocation
 
-1. Update `_DEFAULT_MIX` dict (line ~68):
+1. Update `_DEFAULT_MIX` using the existing lowercase internal bucket keys:
    ```python
-   'MyProductType': {'Equity': 75, 'CorporateDebt': 25},
+   'MY_PRODUCT_TYPE': {'equity': 75, 'corporate_debt': 25},
    ```
 
-2. Update `_classify_mf_category()` or `_classify_instrument_category()` (lines ~79-105):
+2. Update `_classify_mf_category()` or `_classify_instrument_category()`:
    ```python
-   if 'MyProduct' in type_label:
-       return 'MyProductType'
+      if type_label.lower() == 'myproduct':
+         return 'MY_PRODUCT_TYPE'
    ```
 
 3. Update `dashboard/templates/dashboard/dashboard.html` if new bucket introduced:
-   - Chart colors (line ~810)
-   - Bucket table rows (line ~720)
+   - Add any new bucket to the engine's bucket definitions and returned data.
+   - Verify chart colors and generic bucket/contributor rendering.
 
-4. Add test (lines ~XXX in test_economic_allocation.py):
+4. Add a focused regression in `test_economic_allocation.py`:
    ```python
    def test_my_product_classification():
        ...
@@ -393,10 +383,10 @@ pytest tests/test_economic_allocation.py::test_hidden_equity_exposure_via_epf -v
 
 ### Fixing XIRR Solver Convergence
 
-1. Inspect logs in CloudWatch (Lambda) or local stdout
-2. Check Newton-Raphson iteration count and NPV final value
-3. Adjust tolerance or iteration limit in `xirr.py` (lines ~50-80)
-4. Add regression test if boundary case discovered
+1. Reproduce with synthetic dated cashflows, without logging personal amounts.
+2. Check signs, elapsed dates, finite inputs, bounds and residual NPV.
+3. Add a focused regression before changing tolerance or iteration limits.
+4. Preserve invalid-input behavior; do not turn an unsolvable rate into zero.
 
 ### Adding a New Optional Sheet
 
@@ -407,22 +397,10 @@ pytest tests/test_economic_allocation.py::test_hidden_equity_exposure_via_epf -v
        return parsed_data
    ```
 
-2. Call from `load()` method (line ~142):
-   ```python
-   self.my_new_data = self._parse_my_new_sheet()
-   ```
-
-3. Add to `ParsedData` return (line ~164):
-   ```python
-   return ParsedData(
-       ...
-       my_new_data=self.my_new_data,
-   )
-   ```
-
-4. Update `aggregator.py` if integration needed
-
-5. Add tests to `tests/test_excel_parser.py`
+2. Call it from `load()` and add the resulting collection to its return dictionary.
+3. Apply finite-value checks and preserve missing-sheet backward compatibility.
+4. Update the owning calculation service and aggregator only if integration needs it.
+5. Add parser and behavior tests alongside the existing optional-sheet tests.
 
 ---
 
@@ -436,7 +414,7 @@ When updating the documentation, verify:
 - [ ] `DEPLOYMENT.md` includes MFTransactions, LookThrough, Targets schema
 - [ ] `CHECKLIST.md` has section on optional sheets and sample generation
 - [ ] `README.md` lists new features and Excel schema updates
-- [ ] `FEATURES_DETAILED.md` covers algorithms, edge cases, testing (this file)
+- [ ] `FEATURES_DETAILED.md` covers algorithms, edge cases, testing
 - [ ] `CODEBASE_ARCHITECTURE.md` explains module integration (this file)
 - [ ] No broken links between docs
 - [ ] All code file references are accurate
@@ -456,10 +434,12 @@ When updating the documentation, verify:
 | Parse LookThrough sheet | `excel_parser.py` |
 | Parse Targets sheet | `excel_parser.py` |
 | Warn on unit reconciliation mismatch | `validators.py` |
-| Render MF blade with transaction history | `dashboard.html` (lines ~639-700) |
-| Render Economic Allocation blade | `dashboard.html` (lines ~687-758) |
+| Remaining FIFO cost and holding periods | `capital_gains.py` |
+| Daily CSV/S3 history and demo generation | `net_worth_history.py` |
+| Render MF blade with transaction history | `dashboard.html` |
+| Render Economic Allocation blade | `dashboard.html` |
 | Orchestrate all features | `aggregator.py` |
-| Pass data to template | `views.py` (line ~78) |
+| Pass data to template and accept daily save | `views.py` |
 
 ---
 
@@ -471,13 +451,17 @@ When updating the documentation, verify:
 - XIRR undefined for investments < 1 day old
 - Hidden equity can be negative (look-through less than labels)
 - No UI for editing transactions (read-only ledger)
+- Daily history is shared by the deployment; no tenant isolation.
+- Lambda workbook and monthly snapshots remain ephemeral; S3 history is separate.
+- FIFO holding periods are approximate analytics, not tax-liability calculations.
+- Deployment IAM remains broad despite the application-role-only PassRole policy.
 
 **Future Enhancements:**
 - Transaction editing UI
 - Recurring SIP templates
 - Benchmark comparison (XIRR vs index)
 - Rebalancing suggestions
-- Tax-lot tracking
+- Asset-specific tax calculation beyond the existing FIFO lot tracking
 - Income analysis (dividends, interest)
 
 ---

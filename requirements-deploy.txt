@@ -1,5 +1,5 @@
 # Core web framework
-Django==5.2.16
+Django==5.2.17
 asgiref==3.12.1
 sqlparse==0.6.0
 
@@ -17,7 +17,7 @@ google-auth-httplib2==0.2.0
 google-api-python-client==2.176.0
 
 # Cloudflare Access origin JWT verification
-PyJWT[crypto]==2.13.0
+PyJWT[crypto]==2.15.0
 
 # Web scraping
 requests==2.34.2
@@ -31,12 +31,12 @@ openpyxl==3.1.5
 et_xmlfile==2.0.0
 
 # Security & utilities
-certifi==2026.7.22
+certifi==2026.10.18
 charset-normalizer==3.5.1
 idna==3.18
-urllib3==2.7.0
+urllib3==2.8.0
 MarkupSafe==3.0.3
-Werkzeug==3.1.8
+Werkzeug==3.1.9
 six==1.17.0
 typing_extensions==4.16.0
 

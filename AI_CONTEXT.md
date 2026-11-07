@@ -1,5 +1,8 @@
 # AI Repository Context
 
+Reviewed against the working tree on **2026-10-31**. Local implementation and
+validation do not establish deployment status.
+
 Provider-neutral briefing for Gemini, Claude, ChatGPT, or another coding model.
 It is intentionally compact to conserve free-tier context and output tokens.
 
@@ -30,7 +33,7 @@ Single-user Django personal-finance dashboard with transaction analytics and
 economic asset allocation. Input is a local XLSX workbook or Google Sheet.
 It resolves mutual-fund NAV and metal prices, calculates portfolio values/
 alerts, computes per-fund and portfolio XIRR from transaction ledgers, maps
-hholdings to economic asset-class buckets (with look-through for hybrid/EPF),
+holdings to economic asset-class buckets (with look-through for hybrid/EPF),
 and renders interactive charts. Local runtime is Windows-compatible; target
 runtime is Python 3.11 on Ubuntu CI and AWS Lambda.
 
@@ -40,7 +43,7 @@ semantics, aggregation, allocation, net-worth treatment, alert rules, XIRR
 computation, or economic bucket classification logic.
 
 RUNTIME
-- Django 5.2; local settings: finance_dashboard.settings.
+- Django 5.2.17 / PyJWT 2.15.0; local settings: finance_dashboard.settings.
 - Lambda settings: finance_dashboard.settings_lambda.
 - Lambda entry: finance_dashboard.wsgi_lambda.application.
 - Zappa identity: project portfolio, stage production, function/stack prefix
@@ -63,28 +66,48 @@ INPUT AND DATA
   MutualFunds.FundName and stored against its Identifier. Transaction Type
   accepts PURCHASE/REDEEM (also Invested/Redeemed for legacy sheets). Amount
   is optional and auto-computed as Units × NAV when absent.
+- Transaction numeric text accepts commas/rupee symbols; dates accept Excel
+  dates and explicit text formats. Invalid/non-positive Units or NAV, negative
+  Amount, and non-finite transaction values are skipped with warnings.
+- Reject non-finite portfolio values before snapshots/chart data. Remaining
+  average cost is remaining FIFO cost / remaining FIFO units. XIRR returns None
+  for same-date-only, non-finite, invalid-guess, or unsolvable inputs.
 - LookThrough columns: Key (fund Identifier or instrument Type), six buckets
   (Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other), optional equity
   style split (EquityLarge, EquityMid, EquitySmall, EquityIntl).
 - Targets columns: AssetClass, TargetPct. Used to compute deviation in
   Economic Allocation blade.
 - NAV: AMFI primary, MFAPI fallback.
-- Metals: GoodReturns primary, then cache/manual/configured fallback.
+- Metals: fresh cache/manual override, live GoodReturns, stale cache, then zero
+  defaults for both gold and silver with a warning.
 - Google Sheets: private Drive export first when credentials exist; public XLSX
   export fallback where possible.
 - Local Google credentials: GOOGLE_SERVICE_ACCOUNT_JSON.
+- Google URLs require HTTPS and validated IDs; exports enforce the 10 MB limit
+  while downloading. CSV exports quote cells and neutralize formula-like text.
 
 STATE
 Lambda /tmp is ephemeral and per execution environment:
 - SQLite: /tmp/db.sqlite3
 - Workbook: /tmp/media
 - Caches: /tmp/cache
-Cold starts can lose state; concurrent Lambdas do not share SQLite. Never call
-this durable storage. Recommend S3/DynamoDB/RDS only for a durability request.
+Cold starts can lose workbook/SQLite state; concurrent Lambdas do not share it.
+Daily history is separate and durable on Lambda:
+- Explicit POST Update Net Worth saves the loaded value, not a scheduled refresh.
+- Local localhost Excel mode: cache/net_worth.csv, using the computer date.
+- Lambda: NET_WORTH_HISTORY_BUCKET is set from Terraform's existing Zappa bucket;
+  net-worth/history/YYYY-MM-DD.json, using Django's time zone (currently UTC).
+- Same-day writes replace the value; S3 versioning retains earlier versions.
+- Shared per deployment, not per workbook/user. Reload source data after cold
+  start before displaying history. Read failures must not silently fall back.
+- Local-only demo CSV has 54 sample dates over one year; never write demo to S3.
+- Legacy monthly SQLite snapshots are not migrated and are not overwritten
+  when the parsed workbook reports errors.
 
 RESOURCE OWNERSHIP
 - Terraform: ACM, API Gateway custom domain/mapping,
-  Lambda execution IAM, GitHub OIDC IAM, encrypted Zappa artifact bucket.
+  Lambda execution IAM, GitHub OIDC IAM, encrypted/versioned Zappa bucket shared
+  with daily history. Lambda GetObject/PutObject and listing are prefix-scoped.
 - Zappa/CloudFormation: Lambda, REST API/stage/deployment, integration, invoke
   permission.
 - External/manual: Terraform backend S3 bucket, registrar, Cloudflare zone and
@@ -95,8 +118,9 @@ Never assign one resource to both Terraform and Zappa.
 DEPLOYMENT
 0. External encrypted/versioned Terraform state bucket exists.
 1. Bootstrap the backend and GitHub OIDC role locally once.
-2. Phase 1 applies baseline Terraform and deploys or updates Zappa.
-3. Configure GitHub secrets/variables.
+2. Configure GitHub secrets/variables.
+3. Phase 1 validates/applies baseline Terraform, patches the S3 history bucket
+  into Lambda settings, and deploys or updates Zappa. No new bucket is needed.
 4. Ubuntu Validate workflow runs Django checks, pytest, Terraform checks, and
    CPython 3.11 manylinux2014 x86_64 wheel checks.
 5. Phase 2 publishes ACM validation DNS in Cloudflare, discovers the Zappa API
@@ -117,6 +141,10 @@ KEY SERVICES
 - calculation_engine.py: Per-fund and portfolio XIRR/gain analytics from
   transaction ledgers.
 - validators.py: MFTransactions unit reconciliation check (warns on mismatch).
+- capital_gains.py: FIFO lots, remaining cost basis, holding-period gain splits;
+  not a tax-liability calculator.
+- net_worth_history.py: atomic local CSV writes, paginated S3 reads, one S3
+  object per date, local-only demo generation.
 - See FEATURES_DETAILED.md for full implementation guide (algorithms,
   edge cases, testing).
 
@@ -126,6 +154,11 @@ SECURITY RULES
 - Preserve HTTPS redirect, HSTS, secure cookies, CSRF-protected mutations,
   origin JWT validation, safe json_script serialization, and managed-path file
   deletion.
+- Preserve CSV formula neutralization, finite-number checks, and download caps.
+- CI PassRole is scoped to the application role/Lambda service. Other CI IAM
+  permissions remain broad; do not describe them as fully least-privileged.
+- Cleanup skips buckets containing net-worth history versions; versioning is
+  not a backup against administrative deletion.
 - Never expose credentials, Sheet IDs, financial data, or raw exceptions.
 - Do not run live, destructive, AWS, GitHub, Cloudflare, or Google operations
   without explicit approval.
@@ -171,11 +204,12 @@ mindmap
         30 seconds
         3 GB /tmp
       Ephemeral SQLite and files
+      Durable daily S3 history
     Ownership
       Terraform
         ACM and custom domain
         IAM and OIDC
-        S3 artifact bucket
+        Versioned S3 artifact and history bucket
       Zappa
         Lambda
         REST API and stage
@@ -216,6 +250,8 @@ integration, attach `CODEBASE_ARCHITECTURE.md`.
   - `calculation_engine.py` (per-fund and portfolio analytics)
   - `validators.py` (MFTransactions reconciliation)
   - `aggregator.py` (orchestration)
+  - `net_worth_history.py` (CSV/S3 daily history)
+  - `capital_gains.py` (FIFO remaining cost and holding periods)
   - Other services as relevant
 - `finance_dashboard/settings.py`
 - `finance_dashboard/settings_lambda.py`

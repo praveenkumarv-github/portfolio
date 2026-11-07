@@ -1,13 +1,16 @@
 # Architecture and Operations
 
+Reviewed against the working tree on **2026-10-31**. Production checks below are
+operator procedures, not claims that a deployment has already been verified.
+
 ## Resource ownership
 
 Terraform manages:
 
 - ACM regional certificate in the baseline state.
 - API Gateway custom domain/base-path mapping in the independent domain state.
-- Lambda execution role and policy for logs.
-- Private AES-256 encrypted S3 Zappa artifact bucket.
+- Lambda execution role, log policy, and prefix-scoped daily-history policy.
+- Private AES-256 encrypted, versioned S3 bucket for Zappa artifacts and history.
 - GitHub OIDC provider, branch-scoped deployment role, and deployment policy.
 
 Zappa/CloudFormation manages:
@@ -27,7 +30,10 @@ External/manual resources include the pre-existing Terraform state bucket, domai
 4. The dashboard loads the last Excel/Google Sheet file from Lambda `/tmp`.
 5. The parser resolves AMFI/MFAPI NAV and GoodReturns metal prices.
 6. The calculation engine creates the portfolio summary and alerts.
-7. SQLite records the current upload path and monthly snapshot.
+7. SQLite records the active upload path; uncached successful builds capture a
+   monthly snapshot only when parser errors are absent.
+8. The view reads daily history independently of the portfolio payload cache.
+   Update Net Worth POST saves the displayed value to local CSV or configured S3.
 
 Portfolio formulas, Excel schema semantics, and alert rules are independent of authentication and deployment configuration.
 
@@ -36,6 +42,10 @@ Portfolio formulas, Excel schema semantics, and alert rules are independent of a
 The MFTransactions sheet (optional) enables per-fund and portfolio-level transaction analytics:
 
 - **XIRR Solver** (`dashboard/services/xirr.py`): pure-Python Newton-Raphson with bisection fallback. No external dependency.
+- **Average cost**: remaining FIFO cost basis divided by remaining units, not
+   net cash invested divided by units. Redemptions do not rewrite purchase cost.
+- **Input guards**: reject non-finite portfolio values; skip malformed transaction
+   quantities, NAVs, and amounts. Same-date-only/unsolvable XIRR returns no rate.
 - **Per-fund analytics** (`calculation_engine._fund_transaction_analytics`): invested amount, redeemed amount, net invested, absolute gain, absolute return %, first investment date, transaction list.
 - **Portfolio-level analytics** (`calculation_engine._portfolio_mf_analytics`): pools XIRR and gain across only the funds that have a recorded transaction ledger. Funds without a ledger do not inflate pooled gain.
 - **Data quality check** (`validators.validate_portfolio_data`): warns if a fund's MFTransactions net units (Invested - Redeemed) do not reconcile within ±0.5% of its declared Units. This catches incomplete or mismatched ledgers.
@@ -65,7 +75,7 @@ Classification priority:
 
 **Hidden Equity Detection**: compares effective equity % (look-through) to naive equity % (Equity/Debt/Hybrid labels). Funds with hidden exposure (e.g., EPF's 15% equity, arbitrage's 20%) can silently increase actual portfolio risk.
 
-**Target Deviations**: optional Targets sheet (AssetClass, TargetPct) computes Current % vs Target % vs Deviation for each bucket. Zero-target buckets are omitted.
+**Target Deviations**: optional Targets sheet (AssetClass, TargetPct) computes Current % vs Target % vs Deviation for each bucket. A zero target is valid; omit a row to leave that bucket without a target.
 
 LookThrough columns: `Key` (fund Identifier or Type), `Equity`, `CorporateDebt`, `GovtSecurities`, `Cash`, `Gold`, `Other`, optional `EquityLarge`, `EquityMid`, `EquitySmall`, `EquityIntl` (all as %); percentages are normalized to 100.
 
@@ -77,8 +87,31 @@ LookThrough columns: `Key` (fund Identifier or Type), `Equity`, `CorporateDebt`,
 | Uploaded workbook | `media/` | `/tmp/media` |
 | NAV cache | `cache/` | `/tmp/cache` |
 | Metal cache | `data/` | `/tmp/cache` |
+| Daily net worth | `cache/net_worth.csv` for localhost Excel | Existing bucket: `net-worth/history/YYYY-MM-DD.json` |
+| Demo history | `cache/net_worth_demo.csv` | Disabled |
 
-Lambda `/tmp` is ephemeral. A warm environment may retain data, but a cold environment starts with a new database and no workbook. Monthly snapshots are not durable or shared between concurrent Lambda environments. The system is appropriate for one person who can reload source data; use S3/DynamoDB/RDS before treating history as durable.
+Lambda `/tmp` remains ephemeral. Cold starts may require reloading a workbook;
+monthly SQLite snapshots are not durable or shared between environments. Daily
+S3 history survives and is loaded when a portfolio is available.
+
+## Daily history operations
+
+- Run Phase 1 to configure `NET_WORTH_HISTORY_BUCKET` from the existing Zappa
+   bucket output, enable versioning, and attach prefix-scoped Lambda access.
+- Click **Update Net Worth** after loading Excel or a Google Sheet. It records
+   the loaded valuation; it does not fetch new Sheet content or run on a schedule.
+- Local CSV uses the computer date; S3 uses Django's time zone (currently UTC).
+   Same-day saves replace the current value, including decreases. Different
+   dates are independent S3 objects; concurrent same-day writes are last-write-wins.
+- One history is shared by the deployment. There is no per-sheet/user partition.
+- **Load Demo Year** writes 54 sample records only to the separate local CSV.
+   Cloud demo requests are rejected and a demo query does not replace S3 history.
+- The chart's 3M/6M/1Y ranges use calendar dates ending at the latest record.
+- S3 failures display an error, never a successful local fallback. Check the
+   bucket setting and prefix-scoped `ListBucket`, `GetObject`, `PutObject` policy.
+- Back up the history prefix independently. Cleanup skips buckets with history
+   versions/delete markers and stops if inspection fails. Do not expire the prefix.
+   Versioning also retains old deployment artifacts and has storage costs.
 
 ## Google Sheet behavior
 
@@ -87,7 +120,7 @@ Credential order:
 1. Local `GOOGLE_SERVICE_ACCOUNT_JSON`, when explicitly set.
 2. No credentials, which selects public export.
 
-When credentials exist, private Drive export is attempted first. If credentials are malformed, dependencies are unavailable, or the service account cannot access that file, the application attempts public export. A private Sheet still fails with a safe access message. Every response must be a structurally valid XLSX ZIP containing workbook metadata before it reaches pandas.
+When credentials exist, private Drive export is attempted first. If credentials are malformed, dependencies are unavailable, or the service account cannot access that file, the application attempts public export. A private Sheet still fails with a safe access message. Every response must be a structurally valid XLSX ZIP containing workbook metadata before it reaches pandas. URLs require HTTPS Google hosts and validated IDs. Public reads are bounded and private exports use small chunks with a size check; both enforce the 10 MB limit while downloading.
 
 Troubleshooting:
 
@@ -169,6 +202,13 @@ At personal traffic levels, Lambda and API Gateway are usually within free or lo
 
 - No durable application database or workbook storage in Lambda.
 - No tenant isolation; design assumes exactly one authorized user.
-- Zappa deployment IAM remains broad because it manages CloudFormation, Lambda, API Gateway, S3, IAM, logs, and events. OIDC limits who can assume it, but further least-privilege work should be based on CloudTrail-observed actions.
+- Zappa deployment IAM remains broad because it manages CloudFormation, Lambda, API Gateway, S3, IAM, logs, and events. PassRole is now restricted to the application execution role and Lambda service, but other IAM actions remain broad. Further least-privilege work should use CloudTrail-observed actions and staging validation.
 - Terraform state bucket lifecycle, encryption, versioning, and access controls are bootstrap responsibilities outside this stack. Native S3 lockfiles are enabled for both `prod/terraform.tfstate` and `prod/domain.tfstate` and require Terraform 1.10 or later.
 - GoodReturns HTML changes can force stale/manual metal prices; AMFI/MFAPI availability affects mutual-fund freshness.
+- Gold/silver fallback values are zero when no usable live/cache value exists;
+   the dashboard warns rather than inventing a market price.
+- Django 5.2.17, PyJWT 2.15.0, certifi 2026.10.18, urllib3 2.8.0, and Werkzeug
+   3.1.9 are the main security pins; Lambda-native cryptography is now 50.0.0
+   after a resolved-package advisory scan. See the dated verification record in
+   [DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md), not old
+   test/coverage counts, for what was actually checked locally.

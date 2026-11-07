@@ -9,6 +9,7 @@ from django.core.exceptions import ImproperlyConfigured
 from .settings import * # noqa: F401,F403
 
 DEBUG = False
+NET_WORTH_HISTORY_BUCKET = os.environ.get("NET_WORTH_HISTORY_BUCKET", "").strip()
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:

@@ -2,11 +2,40 @@
 Edge-case tests for hardened pipeline behavior.
 """
 from unittest.mock import patch
+from pathlib import Path
+import shutil
+import subprocess
 
 import pytest
 
 from dashboard.services.calculation_engine import build_portfolio
 from dashboard.services.validators import validate_portfolio_data
+
+
+@pytest.mark.parametrize("inspection,expected_status", [("1", 0), ("None", 0), ("denied", 1)])
+def test_cleanup_preserves_history_and_fails_closed(inspection, expected_status):
+        bash = shutil.which("bash")
+        if not bash:
+                pytest.skip("bash is required to exercise the cleanup guard")
+        source = (Path(__file__).resolve().parents[1] / "scripts/cleanup_aws_resources.sh").read_text(encoding="utf-8")
+        function = "delete_s3_bucket() {" + source.split("delete_s3_bucket() {", 1)[1].split("\ndelete_secret()", 1)[0]
+        stub = '''aws() {
+            if [[ "$1 $2" != "s3api list-object-versions" || "$*" != *"--prefix net-worth/history/"* ]]; then
+                echo "UNEXPECTED_AWS_OPERATION"
+                return 87
+            fi
+            if [[ "$INSPECTION" == "denied" ]]; then return 1; fi
+            printf '%s\\n' "$INSPECTION"
+        }
+        '''
+        result = subprocess.run(
+                [bash, "-s"], input=f"INSPECTION={inspection}\n" + stub + function + '\ndelete_s3_bucket "test-bucket"\n',
+                text=True, capture_output=True, timeout=10,
+        )
+        assert result.returncode == expected_status
+        assert "UNEXPECTED_AWS_OPERATION" not in result.stdout
+        assert "[ACTION]" not in result.stdout
+        assert "[SKIP]" in result.stdout if expected_status == 0 else "[ABORT]" in result.stdout
 
 
 def _empty_data():
@@ -37,6 +66,20 @@ class TestEmptyDataset:
 
 
 class TestExtremeValues:
+    @pytest.mark.parametrize("value", [float("inf"), -float("inf"), float("nan")])
+    def test_nonfinite_values_are_rejected_before_charts(self, value):
+        data = _empty_data()
+        data["liquid_total"] = value
+        with pytest.raises(ValueError, match="Non-finite"):
+            build_portfolio(data)
+
+    def test_overflowed_net_worth_is_rejected(self):
+        data = _empty_data()
+        data["liquid_total"] = 1e308
+        data["retirement_total"] = 1e308
+        with pytest.raises(ValueError, match="net_worth"):
+            build_portfolio(data)
+
     def test_extreme_values_do_not_crash(self):
         data = _empty_data()
         data["mutual_funds_summary"]["total_current_value"] = 1e15

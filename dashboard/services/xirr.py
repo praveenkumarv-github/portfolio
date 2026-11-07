@@ -17,6 +17,7 @@ Algorithm: Newton-Raphson with a bisection fallback (bounded to
 """
 
 from datetime import date
+from math import isfinite
 from typing import List, Optional, Sequence, Tuple
 
 Cashflow = Tuple[date, float]
@@ -83,17 +84,28 @@ def xirr(cashflows: List[Cashflow], guess: float = 0.1) -> Optional[float]:
 
     ordered = sorted(cashflows, key=lambda x: x[0])
     amounts = [cf for _, cf in ordered]
+    if ordered[0][0] == ordered[-1][0] or not all(isfinite(amount) for amount in amounts):
+        return None
+    if not isfinite(guess) or not _LOW_RATE_BOUND < guess <= _HIGH_RATE_BOUND:
+        return None
     if not (any(a > 0 for a in amounts) and any(a < 0 for a in amounts)):
         return None
 
     rate = guess
     for _ in range(_MAX_NEWTON_ITER):
-        f = _xnpv(rate, ordered)
-        df = _xnpv_derivative(rate, ordered)
-        if df == 0:
+        try:
+            f = _xnpv(rate, ordered)
+            df = _xnpv_derivative(rate, ordered)
+        except (OverflowError, ZeroDivisionError):
+            rate = None
+            break
+        if df == 0 or not isfinite(f) or not isfinite(df):
             rate = None
             break
         new_rate = rate - f / df
+        if not isfinite(new_rate) or new_rate > _HIGH_RATE_BOUND:
+            rate = None
+            break
         if new_rate <= _LOW_RATE_BOUND:
             new_rate = (rate + _LOW_RATE_BOUND) / 2
         if abs(new_rate - rate) < 1e-9:
@@ -103,7 +115,9 @@ def xirr(cashflows: List[Cashflow], guess: float = 0.1) -> Optional[float]:
     else:
         rate = None
 
-    if rate is not None and abs(_xnpv(rate, ordered)) < 1e-3:
-        return rate
-
-    return _bisect(ordered)
+    try:
+        if rate is not None and abs(_xnpv(rate, ordered)) < 1e-3:
+            return rate
+        return _bisect(ordered)
+    except (OverflowError, ZeroDivisionError):
+        return None

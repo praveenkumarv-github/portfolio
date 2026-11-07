@@ -82,6 +82,7 @@ def patch_settings(config: dict, environment: Mapping[str, str]) -> dict:
     variables = stage_config.setdefault("environment_variables", {})
     variables.pop("GOOGLE_SERVICE_ACCOUNT_JSON", None)
     variables["DJANGO_SETTINGS_MODULE"] = "finance_dashboard.settings_lambda"
+    variables["NET_WORTH_HISTORY_BUCKET"] = bucket
     variables["DJANGO_SECRET_KEY"] = _required(environment, "DJANGO_SECRET_KEY")
     variables["ALLOWED_HOSTS"] = _required(environment, "ALLOWED_HOSTS")
     variables.pop("GOOGLE_SERVICE_ACCOUNT_SECRET_ID", None)

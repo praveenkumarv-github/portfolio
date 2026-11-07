@@ -30,7 +30,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .url_utils import extract_google_sheet_id
-from .workbook_validation import InvalidWorkbookError, validate_xlsx
+from .workbook_validation import MAX_XLSX_BYTES, InvalidWorkbookError, validate_xlsx
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +115,17 @@ def _fetch_private(sheet_id: str) -> bytes:
             ),
         )
         buf = io.BytesIO()
-        downloader = MediaIoBaseDownload(buf, export_req)
+        downloader = MediaIoBaseDownload(buf, export_req, chunksize=64 * 1024)
         done = False
         while not done:
             _, done = downloader.next_chunk()
+            if buf.tell() > MAX_XLSX_BYTES:
+                raise GoogleSheetError("Workbook exceeds the 10 MB limit")
         payload = buf.getvalue()
         logger.info("[GSheet][private] fetched %d bytes", len(payload))
         return payload
+    except GoogleSheetError:
+        raise
     except Exception as exc:
         msg = str(exc).lower()
         if any(k in msg for k in ("403", "forbidden", "permission", "access denied")):
@@ -140,7 +144,11 @@ def _fetch_public(sheet_id: str) -> bytes:
     req = Request(url, headers={"User-Agent": "FinanceDashboard/1.0"})
     try:
         with urlopen(req, timeout=20) as resp:
-            payload = resp.read()
+            payload = resp.read(MAX_XLSX_BYTES + 1)
+            if len(payload) > MAX_XLSX_BYTES:
+                raise GoogleSheetError("Workbook exceeds the 10 MB limit")
+    except GoogleSheetError:
+        raise
     except HTTPError as exc:
         if exc.code in {401, 403, 404}:
             raise GoogleSheetAccessError("Sheet not publicly accessible") from exc

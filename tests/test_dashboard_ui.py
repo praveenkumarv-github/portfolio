@@ -1,4 +1,10 @@
 import os
+import csv
+import io
+import json
+from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 from unittest.mock import patch
 
@@ -9,6 +15,22 @@ from django.test import RequestFactory
 
 from dashboard.models import FileUploadHistory
 from dashboard.views import dashboard_view
+
+
+def test_csv_export_neutralizes_formulas_and_quotes_cells():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is required to exercise the browser CSV serializer")
+    template = (Path(__file__).resolve().parents[1] / "dashboard/templates/dashboard/dashboard.html").read_text(encoding="utf-8")
+    serializer = "function csvCell(value){" + template.split("function csvCell(value){", 1)[1].split("function exportExcel(){", 1)[0]
+    values = ['=1+1', '+1+1', '-1+1', '@SUM(1)', '\t=1+1', '\r=1+1', 'Fund, "A"', '100.25']
+    result = subprocess.run(
+        [node, "-e", serializer + "console.log(" + json.dumps(values) + ".map(csvCell).join(','));"],
+        text=True, capture_output=True, check=True, timeout=10,
+    )
+    cells = next(csv.reader(io.StringIO(result.stdout)))
+    assert cells[:6] == ["'" + value.strip() for value in values[:6]]
+    assert cells[6:] == values[6:]
 
 
 def _build_excel(fund_name: str = "Fund A") -> str:

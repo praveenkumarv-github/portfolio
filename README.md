@@ -1,5 +1,8 @@
 # Personal Finance Dashboard
 
+Documentation reviewed against the working tree on **2026-10-31**. Changes
+described here are implemented locally; this does not imply they are deployed.
+
 A single-user Django dashboard for tracking mutual funds, retirement accounts,
 liquid assets, emergency funds, insurance, gold, and silver from an Excel
 workbook or Google Sheet.
@@ -43,6 +46,7 @@ flowchart LR
     APP --> NAV[AMFI / MFAPI]
     APP --> METAL[GoodReturns / cache / manual price]
     APP --> TMP[Lambda /tmp<br/>SQLite, workbook, caches]
+    APP --> HISTORY[Private S3 bucket<br/>net-worth/history daily records]
 ```
 
 ### Resource ownership
@@ -52,7 +56,7 @@ flowchart TB
     TF[Terraform] --> ACM[ACM certificate]
     TF --> DOMAIN[API Gateway custom domain and mapping]
     TF --> IAM[Lambda and GitHub OIDC IAM roles]
-    TF --> S3[Encrypted Zappa artifact bucket]
+    TF --> S3[Encrypted, versioned bucket<br/>Zappa artifacts and net-worth history]
 
     Z[Zappa / CloudFormation] --> LAMBDA[Lambda function]
     Z --> REST[API Gateway REST API and stage]
@@ -110,6 +114,26 @@ sequenceDiagram
   transactions (avoiding artificial gains from untracked funds).
 - Data-quality validator: warns if MFTransactions net units don't reconcile
   within ±0.5% of declared units.
+- Remaining average cost uses FIFO lot cost, not redemption proceeds.
+- Same-date-only, non-finite, and numerically unsolvable XIRR inputs return no
+  rate rather than a misleading initial guess or an arithmetic crash.
+- Non-finite portfolio values are rejected. Transaction rows with non-positive
+  Units/NAV, negative Amount, or non-finite values are skipped with a warning.
+
+### Daily Net Worth History
+
+- **Update Net Worth** records the loaded portfolio explicitly; refresh is not a save.
+- Local Excel uploads use `cache/net_worth.csv`, one row per calendar date.
+- Lambda Google Sheet and Excel portfolios use the existing private Zappa bucket,
+  with one `net-worth/history/YYYY-MM-DD.json` object per date.
+- Same-day updates replace the current value; bucket versioning retains earlier
+  S3 versions. Dates use the local computer date for CSV and Django's configured
+  time zone, currently UTC, for S3.
+- The full-width chart filters actual date ranges for 3M, 6M, 1Y, and All.
+- **Load Demo Year** creates 54 sample records in a separate local CSV. Demo
+  actions are unavailable in S3 mode and never write fabricated cloud history.
+- Monthly SQLite snapshots remain a legacy mechanism; parser errors prevent
+  partial results from overwriting an existing monthly snapshot.
 
 ### Economic Asset Allocation (Look-Through)
 
@@ -129,6 +153,8 @@ sequenceDiagram
 ### Workbook and application security
 
 - Maximum compressed workbook size: 10 MB.
+- Google exports enforce the size limit during download, not only after loading
+  the entire response. Export URLs accept HTTPS Google hosts and validated IDs.
 - Maximum expanded ZIP size: 100 MB.
 - Maximum ZIP entries: 2,000.
 - Rejection of encrypted, malformed, empty, and non-XLSX ZIP files.
@@ -137,6 +163,7 @@ sequenceDiagram
 - Transactional replacement of the active workbook with cleanup on failure.
 - Chart data emitted with Django `json_script` instead of unsafe inline
   JavaScript, preventing workbook-controlled stored XSS.
+- CSV cells are quoted and formula-leading text is neutralized before export.
 - Metal-price refresh changed from state-changing GET to CSRF-protected POST.
 - Generic user-facing failures while detailed diagnostics remain in logs.
 
@@ -171,10 +198,16 @@ sequenceDiagram
   pysqlite3.
 - API Gateway ID format validation before Terraform receives it.
 - Ubuntu validation workflow for Django, tests, Terraform, and Lambda wheels.
-- Django 5.2.16 and PyJWT 2.13.0 security upgrades.
+- Security pins: Django 5.2.17, PyJWT 2.15.0, certifi 2026.10.18,
+  urllib3 2.8.0, and Werkzeug 3.1.9 in local and deployment requirements.
+- Lambda-native requirements pin cryptography 50.0.0 after the resolved release
+  dependency audit; compatible Python 3.11/manylinux2014 wheels were verified.
+- CI `iam:PassRole` is restricted to the application execution role and the
+  Lambda service; other deployment permissions remain broad.
 
-Portfolio formulas, workbook schema meanings, allocation logic, net-worth
-calculations, and alert rules were not changed by these enhancements.
+Insurance remains excluded from net worth. The latest audit corrected remaining
+FIFO average cost, XIRR edge cases, invalid numeric inputs, and snapshot writes;
+it did not change asset categories or introduce tax-liability calculations.
 
 ## Data Flow and Storage
 
@@ -186,7 +219,9 @@ calculations, and alert rules were not changed by these enhancements.
    defaults as fallback.
 6. The calculation engine produces allocation, net worth, risk coverage, and
    alerts.
-7. Django renders the dashboard and records the active file and snapshot.
+7. Django renders the dashboard and reads daily CSV/S3 history when enabled.
+8. The update button saves daily history. Legacy monthly snapshots are captured
+  on uncached successful portfolio builds without parser errors.
 
 ### Excel schema
 
@@ -227,11 +262,48 @@ Insurance is risk coverage and is intentionally excluded from net worth.
 | Active workbook | `media/` | `/tmp/media/` |
 | NAV cache | `cache/` | `/tmp/cache/` |
 | Metal cache | `data/` | `/tmp/cache/` |
+| Daily net worth | `cache/net_worth.csv` (local Excel) | Existing private Zappa bucket: `net-worth/history/YYYY-MM-DD.json` |
+| Sample net worth history | `cache/net_worth_demo.csv` | Disabled |
+
+For a local Excel upload on `localhost` or `127.0.0.1` with `DEBUG=True`,
+click **Update Net Worth** beside Net Worth Trend to save the displayed portfolio
+total. Records use the computer's current date (`YYYY-MM-DD`, no time) and INR
+amounts rounded to two decimals. A same-day click replaces that day's value,
+including decreases; a new day adds a record. Loading or refreshing the dashboard
+does not write this CSV. History is shared across local workbook uploads.
+
+**Load Demo Year** creates 54 sample valuations across the preceding year in a
+separate CSV and opens a labeled demo chart. **Actual History** returns to real
+records; **Update Net Worth** also leaves demo mode. The 3M/6M/1Y filters select
+calendar periods ending at the latest record, not fixed numbers of rows.
+Both CSVs are git-ignored; back up `cache/net_worth.csv` before clearing caches.
+
+On Lambda, Phase 1 sets `NET_WORTH_HISTORY_BUCKET` to the existing Terraform
+deployment bucket. **Update Net Worth** works for Google Sheets and Excel uploads,
+saving the currently loaded portfolio value under `net-worth/history/YYYY-MM-DD.json`.
+Reload a Google Sheet before saving if its source values have changed. Saves are
+explicit, not scheduled or triggered by page refresh. Dates use Django's configured
+time zone (currently UTC on Lambda); same-day saves replace the current record,
+while S3 versioning retains previous versions. Concurrent same-day saves use the
+last successful write; different days use independent objects. One shared history
+is maintained per deployment, not per workbook or user. Demo history stays local.
+Reads are paginated and sorted by date. Storage errors are displayed instead of
+silently switching to temporary files or database history.
+
+Terraform grants Lambda only `GetObject`/`PutObject` under `net-worth/history/*`
+and `ListBucket` restricted to that prefix. No new bucket or AWS credentials are
+needed. Bucket versioning applies to deployment packages too and increases retained
+storage; do not apply expiration or cleanup rules to the history prefix. The cleanup
+helper skips buckets containing history versions and stops if it cannot verify them.
+Keep an independent backup; versioning is not protection against an administrator
+explicitly deleting the bucket and all versions.
 
 Lambda `/tmp` is ephemeral and private to one execution environment. A cold
 start or parallel Lambda environment can have a new database and no workbook.
-Reload the source workbook when necessary. Move application state to durable
-S3/DynamoDB/RDS storage before treating snapshots as permanent history.
+Reload the source workbook when necessary; S3 history survives and is displayed
+once a portfolio is loaded. Existing monthly SQLite snapshots are not migrated
+automatically. Deployments without `NET_WORTH_HISTORY_BUCKET` retain the legacy
+monthly SQLite chart without the durable update control.
 
 ## Local Development
 
@@ -365,6 +437,10 @@ For local private-sheet testing, set `GOOGLE_SERVICE_ACCOUNT_JSON` in your local
 environment. Public Sheets can use the public-export fallback without service-account
 credentials.
 
+The current deployment workflow does not provision private Google credentials for
+Lambda, and the Zappa patcher removes service-account JSON from its environment.
+Private-sheet production access needs a separately secured credential setup.
+
 ### Step 3 - Configure GitHub Actions
 
 Add these repository secrets under **Settings -> Secrets and variables ->
@@ -421,13 +497,13 @@ The workflow performs these operations in order:
 
 1. Assumes the AWS deployment role with GitHub OIDC.
 2. Installs Python 3.11 dependencies and Amazon Linux-compatible native wheels.
-3. Reconciles the baseline Terraform state.
+3. Initializes, validates, and reconciles the baseline Terraform state.
 4. Reads Terraform's Lambda role and artifact-bucket outputs.
-5. Patches Zappa settings and validates all required production values.
-6. Optionally upserts the Google credential secret.
-7. Deploys a new Zappa stack or updates the existing one.
-8. Reads and validates the REST API ID from `zappa status`.
-9. Stops without changing Cloudflare or the custom-domain state.
+5. Patches Zappa settings, including the same history bucket, and validates all
+  required production values.
+6. Deploys a new Zappa stack or updates the existing one.
+7. Reads and validates the REST API ID from `zappa status`.
+8. Stops without changing Cloudflare or the custom-domain state.
 
 ### Step 5 - Run Phase 2
 
@@ -462,6 +538,14 @@ Verify after every production deployment:
 | Invalid/oversized workbook | Rejected without processing |
 | Metal refresh GET | Does not mutate state |
 | Metal refresh POST | Refreshes with CSRF protection |
+| Update Net Worth POST | Saves one date-only record; same-day decreases replace the value |
+| S3 storage failure | Shows an error; no silent local or database history fallback |
+| Cloud demo request | Rejected; real history is unchanged |
+| Formula-like workbook label in CSV | Exported as quoted text, not an executable formula |
+
+See [DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md) for the
+dated verification record. Test counts and dependency advisory results are not
+permanent guarantees; rerun checks after changes. No coverage percentage is claimed.
 
 Useful local HTTP checks:
 
@@ -510,7 +594,9 @@ The workflow retains foundational Terraform resources such as the certificate,
 IAM roles, artifact bucket, and OIDC provider. Cloudflare DNS records also
 remain and can be removed separately with reviewed DNS access. A
 full teardown requires a separately reviewed local `terraform destroy`. Back up
-state and any required workbook data before destructive operations. The
+state, S3 history, and any required workbook data before destructive operations.
+The cleanup helper preserves buckets containing net-worth history versions and
+stops that bucket's cleanup if it cannot verify their absence. The
 external Terraform backend bucket is never destroyed by this stack.
 
 ## Troubleshooting
@@ -561,9 +647,14 @@ external Terraform backend bucket is never destroyed by this stack.
 
 - This is a single-user application, not a multi-tenant platform.
 - Lambda `/tmp` data and SQLite snapshots are not durable.
+- Daily S3 history is durable but shared per deployment, not per workbook or
+  user. Reload the workbook after a cold start to display it. Versioning is not
+  an independent backup and also retains old deployment artifacts.
 - The deployment role remains broad because Zappa manages Lambda,
   CloudFormation, API Gateway, IAM, S3, logs, and events. OIDC restricts who can
   assume it; further reduction should use CloudTrail-observed actions.
+- Local/production dependency pins have been scanned, but unpinned transitive
+  packages and deployed configuration require separate release verification.
 - CloudWatch alarms, explicit log retention, AWS Budget alerts, and WAF rules
   are not currently provisioned.
 - HSTS subdomain inclusion and preload are intentionally disabled because they

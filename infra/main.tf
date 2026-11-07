@@ -79,6 +79,46 @@ resource "aws_s3_bucket" "deploy" {
   bucket = "${var.project}-zappa-${var.environment}"
 }
 
+resource "aws_s3_bucket_versioning" "deploy" {
+  bucket = aws_s3_bucket.deploy.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+data "aws_iam_policy_document" "lambda_net_worth" {
+  statement {
+    sid       = "ListNetWorthHistory"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.deploy.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "s3:prefix"
+      values   = ["net-worth/history/"]
+    }
+  }
+
+  statement {
+    sid       = "ReadWriteNetWorthHistory"
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = ["${aws_s3_bucket.deploy.arn}/net-worth/history/*"]
+  }
+}
+
+resource "aws_iam_policy" "lambda_net_worth" {
+  name   = "${var.project}-lambda-net-worth-${var.environment}"
+  policy = data.aws_iam_policy_document.lambda_net_worth.json
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_net_worth" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_net_worth.arn
+}
+
 resource "aws_s3_bucket_public_access_block" "deploy" {
   bucket = aws_s3_bucket.deploy.id
 

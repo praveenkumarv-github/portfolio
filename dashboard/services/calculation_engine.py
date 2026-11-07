@@ -21,6 +21,7 @@ from typing import Dict, List, Any, Optional
 
 from .xirr import xirr as _xirr
 from .capital_gains import classify_holding_periods as _classify_holding_periods
+from .validators import require_finite_values
 
 
 # ---------------------------------------------------------------------------
@@ -246,10 +247,9 @@ def _fund_transaction_analytics(
     redeemed = sum(_non_negative(t["amount"]) for t in fund_txns if t["type"] == "Redeemed")
     net_invested = invested - redeemed
 
-    invested_units = sum(_non_negative(t["units"]) for t in fund_txns if t["type"] == "Invested")
-    redeemed_units = sum(_non_negative(t["units"]) for t in fund_txns if t["type"] == "Redeemed")
-    net_units_held = invested_units - redeemed_units
-    avg_cost_nav = round(net_invested / net_units_held, 4) if net_units_held > 0 else None
+    capital_gains = _classify_holding_periods(fund_txns, current_nav, _date.today())
+    remaining_units = capital_gains["remaining_units"]
+    avg_cost_nav = round(capital_gains["remaining_cost_basis"] / remaining_units, 4) if remaining_units > 0 else None
 
     cashflows = [
         (t["date"], -_non_negative(t["amount"]) if t["type"] == "Invested" else _non_negative(t["amount"]))
@@ -277,7 +277,7 @@ def _fund_transaction_analytics(
         "first_investment_date": fund_txns[0]["date"],
         "avg_cost_nav": avg_cost_nav,
         "cagr_pct": cagr_pct,
-        "capital_gains": _classify_holding_periods(fund_txns, current_nav, _date.today()),
+        "capital_gains": capital_gains,
     }
 
 
@@ -478,6 +478,7 @@ def _classify_fund_type(fund: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def build_portfolio(data: dict) -> PortfolioSummary:
+    require_finite_values(data)
     mf_list = [dict(f) for f in (data.get("mutual_funds") or [])]
     ret_list = [dict(item) for item in (data.get("retirement") or [])]
     liq_list = [dict(item) for item in (data.get("liquid") or [])]
@@ -506,6 +507,7 @@ def build_portfolio(data: dict) -> PortfolioSummary:
 
     # net_worth = assets only (insurance excluded)
     net_worth = mf_total + ret_total + liq_total + ef_total + met_total
+    require_finite_values(net_worth, "net_worth")
 
     monthly_expense = max(ins_prem / 12, 50_000.0) if ins_prem > 0 else 50_000.0
 

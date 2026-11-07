@@ -8,11 +8,14 @@ import shutil
 import uuid
 from pathlib import Path
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.contrib import messages
 from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from .models import FileUploadHistory
 from .services.google_sheet_service import (
@@ -27,6 +30,7 @@ from .services.metal_price_service import (
     set_manual_price,
 )
 from .services.workbook_validation import InvalidWorkbookError, validate_xlsx
+from .services.net_worth_history import read_history, save_net_worth, seed_demo_history, uses_s3_history
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +44,15 @@ logger = logging.getLogger(__name__)
 def _is_google_temp_file(file_path: str) -> bool:
     name = os.path.basename(file_path)
     return name.startswith("gsheet_") or name == "latest_gsheet.xlsx"
+
+
+def _local_history_enabled(request, file_path):
+    return (
+        settings.DEBUG
+        and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME")
+        and request.get_host().split(":")[0] in {"localhost", "127.0.0.1"}
+        and not _is_google_temp_file(file_path)
+    )
 
 
 def _delete_managed_file(file_path: str) -> None:
@@ -86,12 +99,24 @@ def dashboard_view(request):
     try:
         payload = build_dashboard_context(last_upload.file_path)
         context.update(payload)
+        context["errors"] = list(payload.get("errors", []))
         source = "Google Sheet" if _is_google_temp_file(last_upload.file_path) else "Local File"
         context["file_info"] = {
             "filename": os.path.basename(last_upload.file_path),
             "source": source,
             "uploaded_at": last_upload.uploaded_at,
         }
+        context["local_net_worth_history"] = _local_history_enabled(request, last_upload.file_path)
+        context["net_worth_s3_history"] = uses_s3_history()
+        context["net_worth_history_enabled"] = uses_s3_history() or context["local_net_worth_history"]
+        if context["net_worth_history_enabled"]:
+            context["net_worth_demo"] = not uses_s3_history() and request.GET.get("history") == "demo"
+            context["snapshots"] = []
+            try:
+                context["snapshots"] = read_history(demo=context["net_worth_demo"])
+            except (OSError, ValueError, TypeError, KeyError, BotoCoreError, ClientError):
+                logger.exception("Net worth history could not be read")
+                context["errors"].append("Net worth history could not be read. Check storage access and record format; no history was changed.")
     except OSError as exc:
         logger.warning("Dashboard workbook access failed: %s", type(exc).__name__)
         context["errors"].append("The loaded workbook is no longer available. Please load it again.")
@@ -100,6 +125,36 @@ def dashboard_view(request):
         context["errors"].append("Dashboard processing failed. Please verify the workbook and try again.")
 
     return render(request, "dashboard/dashboard.html", context)
+
+
+@require_POST
+def update_net_worth(request):
+    last_upload = FileUploadHistory.objects.first()
+    if not last_upload or not (uses_s3_history() or _local_history_enabled(request, last_upload.file_path)):
+        messages.error(request, "Net worth history requires configured S3 storage or a local Excel upload on localhost.")
+        return redirect("dashboard")
+    action = request.POST.get("action", "update")
+    if action not in {"update", "demo"}:
+        messages.error(request, "Invalid net worth action.")
+        return redirect("dashboard")
+    if action == "demo" and uses_s3_history():
+        messages.error(request, "Demo history is available only locally.")
+        return redirect("dashboard")
+    try:
+        payload = build_dashboard_context(last_upload.file_path)
+        portfolio = payload.get("portfolio")
+        if portfolio is None or payload.get("errors"):
+            messages.error(request, "Load a valid portfolio before saving net worth.")
+            return redirect("dashboard")
+        if action == "demo":
+            seed_demo_history(portfolio.net_worth)
+            return redirect(reverse("dashboard") + "?history=demo")
+        save_net_worth(portfolio.net_worth)
+        messages.success(request, "Net worth saved for today. Any earlier value for today was replaced.")
+    except Exception:
+        logger.exception("Net worth history update failed")
+        messages.error(request, "Net worth could not be saved. Check the portfolio and history storage access.")
+    return redirect("dashboard")
 
 
 def upload_file(request):

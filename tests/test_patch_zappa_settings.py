@@ -39,6 +39,7 @@ def test_patch_produces_secure_lambda_configuration():
     assert "GOOGLE_SERVICE_ACCOUNT_JSON" not in variables
     assert "GOOGLE_SERVICE_ACCOUNT_SECRET_ID" not in variables
     assert variables["CLOUDFLARE_ACCESS_ENABLED"] == "true"
+    assert variables["NET_WORTH_HISTORY_BUCKET"] == "existing-bucket"
 
 
 def test_patch_uses_terraform_outputs_when_present():
@@ -48,6 +49,14 @@ def test_patch_uses_terraform_outputs_when_present():
     )
     assert config["production"]["role_arn"].endswith("from-terraform")
     assert config["production"]["s3_bucket"] == "tf-bucket"
+    assert config["production"]["environment_variables"]["NET_WORTH_HISTORY_BUCKET"] == "tf-bucket"
+
+
+def test_history_bucket_cannot_drift_from_terraform_deploy_bucket():
+    config = copy.deepcopy(BASE_CONFIG)
+    config["production"]["environment_variables"]["NET_WORTH_HISTORY_BUCKET"] = "stale-bucket"
+    result = patch_settings(config, _environment(TF_S3_BUCKET="tf-bucket"))
+    assert result["production"]["environment_variables"]["NET_WORTH_HISTORY_BUCKET"] == "tf-bucket"
 
 
 @pytest.mark.parametrize("missing", ["DJANGO_SECRET_KEY", "ALLOWED_HOSTS", "CLOUDFLARE_ACCESS_AUDIENCE"])

@@ -93,6 +93,31 @@ def mock_metal():
 # ---------------------------------------------------------------------------
 
 class TestExcelParserHappyPath:
+    def test_infinite_amount_is_rejected(self, mock_nav, mock_metal):
+        from dashboard.services.excel_parser import ExcelParserError, parse_excel_file
+        path = _build_excel(_minimal_sheets(liquid_rows=[{"AccountName": "SBI", "Type": "Savings", "Amount": "inf"}]))
+        try:
+            with pytest.raises(ExcelParserError, match="Non-finite"):
+                parse_excel_file(path)
+        finally:
+            os.unlink(path)
+
+    @pytest.mark.parametrize("units,nav,amount", [(-1, 50, 50), (1, -50, 50), (1, 50, -50), ("inf", 50, 50)])
+    def test_invalid_transactions_are_skipped(self, mock_nav, mock_metal, units, nav, amount):
+        from dashboard.services.excel_parser import parse_excel_file
+        sheets = _minimal_sheets()
+        sheets["MFTransactions"] = pd.DataFrame([{
+            "FundIdentifier": "119551", "Type": "Invested", "Date": "2025-01-01",
+            "Units": units, "NAV": nav, "Amount": amount,
+        }])
+        path = _build_excel(sheets)
+        try:
+            result = parse_excel_file(path)
+            assert result["data"]["mf_transactions"] == []
+            assert any("invalid Units" in warning for warning in result["warnings"])
+        finally:
+            os.unlink(path)
+
     def test_full_parse_success(self, mock_nav, mock_metal):
         path = _build_excel(_minimal_sheets())
         try:
@@ -393,6 +418,41 @@ class TestOptionalSheets:
             assert [transaction["identifier"] for transaction in transactions] == ["120716", "120716"]
             assert [transaction["type"] for transaction in transactions] == ["Invested", "Redeemed"]
             assert transactions[0]["amount"] == pytest.approx(10_000.0)
+        finally:
+            os.unlink(path)
+
+    def test_mf_transactions_user_sheet_format_text_amounts_and_dates(self, mock_nav_factory, mock_metal_fn):
+        mock_nav_factory.return_value.get_nav.return_value = (100.0, "Cached")
+        sheets = _minimal_sheets(mf_rows=[
+            {"FundName": "UTI Nifty 50 Index Fund Direct Growth", "Units": 100.0, "Identifier": "120716"},
+            {"FundName": "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund Direct Growth", "Units": 10.0, "Identifier": "152000"},
+        ])
+        sheets["MFTransactions"] = pd.DataFrame([
+            {"Scheme Name": "UTI Nifty 50 Index Fund Direct Growth", "Transaction Type": "PURCHASE",
+             "Units": "93.05", "NAV": "161.2", "Amount": "15,000", "Date": "19 Oct 2026"},
+            {"Scheme Name": "Navi Nifty Smallcap250 Momentum Quality 100 Index Fund Direct Growth", "Transaction Type": "PURCHASE",
+             "Units": "1251.86", "NAV": "11.98", "Amount": "15,001", "Date": "29 Sep 2026"},
+            {"Scheme Name": "UTI Nifty 50 Index Fund Direct Growth", "Transaction Type": "REDEEM",
+             "Units": 47.33, "NAV": 165.28, "Amount": 7822, "Date": "08 Jul 2026"},
+            {"Scheme Name": "UTI Nifty 50 Index Fund Plan Growth", "Transaction Type": "PURCHASE",
+             "Units": "47.33", "NAV": "169.04", "Amount": "8,000", "Date": "06 Jul 2026"},
+        ])
+        path = _build_excel(sheets)
+        try:
+            from dashboard.services.excel_parser import parse_excel_file
+            from datetime import date
+            result = parse_excel_file(path)
+            txns = result["data"]["mf_transactions"]
+            assert len(txns) == 3
+            assert txns[0]["amount"] == pytest.approx(15_000.0)
+            assert txns[0]["units"] == pytest.approx(93.05)
+            assert txns[0]["nav"] == pytest.approx(161.2)
+            assert txns[0]["date"] == date(2026, 10, 19)
+            assert txns[1]["identifier"] == "152000"
+            assert txns[1]["amount"] == pytest.approx(15_001.0)
+            assert txns[2]["type"] == "Redeemed"
+            assert txns[2]["date"] == date(2026, 7, 8)
+            assert any("UTI Nifty 50 Index Fund Plan Growth" in w for w in result["warnings"])
         finally:
             os.unlink(path)
 

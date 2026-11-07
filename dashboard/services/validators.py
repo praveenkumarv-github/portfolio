@@ -8,12 +8,25 @@ without crashing the UI.
 """
 
 from typing import Any, Dict, List
+from math import isfinite
+from numbers import Real
 
 
 # Sanity bounds
 NAV_MIN, NAV_MAX = 0.0, 10_000.0
 GOLD_MIN, GOLD_MAX = 1_000.0, 200_000.0
 SILVER_MIN, SILVER_MAX = 10.0, 5_000.0
+
+
+def require_finite_values(value: Any, path: str = "portfolio") -> None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            require_finite_values(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            require_finite_values(item, f"{path}[{index}]")
+    elif isinstance(value, Real) and not isfinite(value):
+        raise ValueError(f"Non-finite numeric value at {path}")
 
 
 def _safe_float(value: Any) -> float:

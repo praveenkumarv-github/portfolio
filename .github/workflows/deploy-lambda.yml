@@ -64,6 +64,7 @@ jobs:
         working-directory: infra
         run: |
           terraform init
+          terraform validate
           terraform apply -auto-approve \
             -var="domain_name=${{ vars.DOMAIN_NAME }}" \
             -var="subdomain=${{ vars.SUBDOMAIN || 'finance' }}" \
@@ -82,7 +83,7 @@ jobs:
           echo "role_arn=$(terraform output -raw lambda_role_arn)" >> "$GITHUB_OUTPUT"
           echo "s3_bucket=$(terraform output -raw s3_bucket)" >> "$GITHUB_OUTPUT"
 
-      - name: Patch zappa settings for CI package + layers
+      - name: Patch zappa settings for CI package, layers and S3 history
         run: |
           source venv/bin/activate
           python scripts/patch_zappa_settings.py

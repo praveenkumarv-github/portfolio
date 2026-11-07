@@ -4,14 +4,40 @@ Handles all Excel file parsing and data validation logic
 """
 import pandas as pd
 import sys
+from math import isfinite
+from datetime import datetime
 from typing import Dict, Any, List
 from .nav_service import get_nav_service
 from .metal_price_service import get_metal_price
+from .validators import require_finite_values
 
 
 class ExcelParserError(Exception):
     """Custom exception for Excel parsing errors"""
     pass
+
+
+_TXN_DATE_FORMATS = ('%d %b %Y', '%d %B %Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%d-%b-%Y')
+
+
+def _to_number(value: Any) -> float:
+    """Accept 15000, 15000.0 or text like '15,000' / '₹15,000'; NaN if unparsable."""
+    if isinstance(value, str):
+        value = value.replace(',', '').replace('₹', '').strip()
+    return pd.to_numeric(value, errors='coerce')
+
+
+def _to_txn_date(value: Any):
+    """Accept real Excel dates or text like '19 Oct 2026'; NaT if unparsable."""
+    if isinstance(value, str):
+        text = value.strip()
+        for fmt in _TXN_DATE_FORMATS:
+            try:
+                return pd.Timestamp(datetime.strptime(text, fmt))
+            except ValueError:
+                continue
+        return pd.NaT
+    return pd.to_datetime(value, errors='coerce')
 
 
 class ExcelParser:
@@ -55,6 +81,7 @@ class ExcelParser:
             self._parse_mf_transactions()
             self._parse_lookthrough()
             self._parse_targets()
+            require_finite_values(self.data)
 
             return {
                 'success': True,
@@ -400,12 +427,12 @@ class ExcelParser:
         else:
             required_row_cols.append(scheme_name_col)
         df = df.dropna(subset=required_row_cols)
-        df['Units'] = pd.to_numeric(df['Units'], errors='coerce').fillna(0)
-        df['NAV'] = pd.to_numeric(df['NAV'], errors='coerce').fillna(0)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+        df['Units'] = df['Units'].map(_to_number).fillna(0)
+        df['NAV'] = df['NAV'].map(_to_number).fillna(0)
+        df['Date'] = df['Date'].map(_to_txn_date)
         has_amount = 'Amount' in df.columns
         if has_amount:
-            df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce')
+            df['Amount'] = df['Amount'].map(_to_number)
 
         def normalize_fund_name(value: Any) -> str:
             return ' '.join(str(value).casefold().split())
@@ -453,6 +480,9 @@ class ExcelParser:
             units = float(row['Units'])
             nav = float(row['NAV'])
             amount = float(row['Amount']) if has_amount and pd.notna(row.get('Amount')) else units * nav
+            if not all(isfinite(value) for value in (units, nav, amount)) or units <= 0 or nav <= 0 or amount < 0:
+                self.warnings.append(f"{sheet_name}: Skipped row with invalid Units, NAV or Amount")
+                continue
 
             transactions.append({
                 'identifier': identifier,

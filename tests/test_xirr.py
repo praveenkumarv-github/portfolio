@@ -38,3 +38,17 @@ class TestXirr:
         cashflows = [(date(2026, 1, 1), 1100.0), (date(2025, 1, 1), -1000.0)]
         rate = xirr(cashflows)
         assert rate == pytest.approx(0.10, abs=1e-4)
+
+    def test_same_day_offsetting_cashflows_have_no_annualized_rate(self):
+        assert xirr([(date(2026, 1, 1), -1000.0), (date(2026, 1, 1), 1000.0)]) is None
+
+    @pytest.mark.parametrize("value", [float("inf"), -float("inf"), float("nan")])
+    def test_nonfinite_cashflows_return_none(self, value):
+        assert xirr([(date(2025, 1, 1), -1000.0), (date(2026, 1, 1), value)]) is None
+
+    @pytest.mark.parametrize("guess", [-1.0, -2.0, float("nan"), float("inf")])
+    def test_invalid_guess_returns_none(self, guess):
+        assert xirr([(date(2025, 1, 1), -1000.0), (date(2026, 1, 1), 1100.0)], guess=guess) is None
+
+    def test_extreme_date_range_does_not_raise(self):
+        assert xirr([(date(1000, 1, 1), -1000.0), (date(9999, 1, 1), 1100.0)]) is None

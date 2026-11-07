@@ -55,8 +55,8 @@ _BOUNDS = {
 
 # Safe defaults (approx Apr 2026 India spot)
 _SAFE_DEFAULTS = {
-    "gold"  : 9_200.0,
-    "silver": 110.0,
+    "gold"  : 0.0,
+    "silver": 0.0,
 }
 
 _GOLD_URL   = "https://www.goodreturns.in/gold-rates/chennai.html"

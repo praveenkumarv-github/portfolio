@@ -1,281 +1,110 @@
 # Documentation Updates Summary
 
-**Date:** 2026-09-07  
-**Purpose:** Update all AI-facing documentation to reflect XIRR, MFTransactions, Economic Allocation, and related features
+**Reviewed:** 2026-10-31 against the local working tree. This supersedes the
+2026-09-07 summary. All ten repository Markdown documents were refreshed in
+place; no new documentation files were needed. Generated/dependency Markdown is
+outside this review. Implementation status is not deployment status.
 
----
+## Document Index
 
-## Files Updated
+| Document | Updated scope |
+|----------|---------------|
+| [README.md](README.md) | Current features, security pins, daily CSV/S3 history, deployment and limits |
+| [AI_CONTEXT.md](AI_CONTEXT.md) | Compact source-based briefing, current storage and security invariants |
+| [AI_FULL_REPO_PROMPT.md](AI_FULL_REPO_PROMPT.md) | Working rules distinguish ephemeral state from existing durable history |
+| [CHECKLIST.md](CHECKLIST.md) | Setup/save/recovery verification, workbook rules and release checks |
+| [CODEBASE_ARCHITECTURE.md](CODEBASE_ARCHITECTURE.md) | Real modules, models, data shapes, orchestration/cache boundaries and tests |
+| [FEATURES_DETAILED.md](FEATURES_DETAILED.md) | Actual APIs, corrected financial examples, XIRR/FIFO/allocation/history behavior |
+| [OPERATIONS.md](OPERATIONS.md) | Daily save semantics, backup/cleanup, shared history, incidents and risks |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Existing-bucket wiring, prefix-scoped Lambda IAM, restricted PassRole and release procedures |
+| [DASHBOARD_AUDIT.md](DASHBOARD_AUDIT.md) | Implemented fixes, remaining risks, evidence and unverified gates |
+| [DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md) | This dated index and verification ledger |
 
-### 1. **AI_CONTEXT.md** ✅ UPDATED
-   - **Lines modified:** APP description, INPUT AND DATA section, CRITICAL INVARIANT, KEY SERVICES, Attachment Strategy tiers
-   - **Changes:**
-     - APP: Added "transaction analytics and economic asset allocation" to purpose
-     - INPUT AND DATA: Added MFTransactions, LookThrough, Targets sheet descriptions with columns
-     - CRITICAL INVARIANT: Added XIRR computation and economic bucket classification to preservation list
-     - KEY SERVICES: New section with 5 service modules (xirr.py, economic_allocation.py, excel_parser.py, calculation_engine.py, validators.py)
-     - Tier 1 & Tier 4: References to FEATURES_DETAILED.md and CODEBASE_ARCHITECTURE.md
-   - **For other AIs:** Quick reference for system components and new feature areas
+## Main Corrections
 
-### 2. **AI_FULL_REPO_PROMPT.md** ✅ UPDATED
-   - **Line modified:** NON-NEGOTIABLE FINANCIAL INVARIANT section
-   - **Changes:**
-     - Added "XIRR computation, economic bucket classification, transaction-ledger reconciliation logic" to preservation list
-   - **For other AIs:** Reinforces that financial logic cannot be changed without explicit approval
+- Daily history is explicit, date-based and separate from legacy monthly SQLite
+  snapshots. Local CSV and its demo file remain isolated; cloud history uses the
+  existing private versioned Zappa bucket and never accepts demo writes.
+- Update Net Worth saves the loaded valuation, not a new Google fetch. Same-day
+  saves replace values, including decreases. Cloud dates use Django's time zone
+  (currently UTC); CSV dates use the local computer date.
+- History is shared per deployment. Lambda workbook/SQLite state is still
+  ephemeral. S3 versioning/cleanup protection is not an independent backup.
+- Corrected remaining FIFO average cost, XIRR bounds/invalid-input behavior,
+  actual parser data shapes, target normalization, and transaction validation.
+- Removed invented test names/APIs, mismatched currency/unit examples, unsupported
+  coverage percentages, and claims that models were unused or future dates rejected.
+- Documented bounded Google downloads, safe CSV exports, finite-number checks,
+  protection against partial monthly snapshots, restricted CI PassRole and
+  dependency security updates.
+- Replaced the speculative HTML audit's already-implemented feature requests and
+  unmeasured performance estimates with current behavior and remaining risks.
 
-### 3. **README.md** ✅ UPDATED
-   - **Sections modified:** "What Was Implemented" and "Excel schema"
-   - **Changes:**
-     - NEW: "Per-Fund Transaction Analytics and XIRR" subsection
-       - MFTransactions sheet (optional)
-       - XIRR solver (pure Python, no external deps)
-       - Per-fund analytics (invested, gain, XIRR, transaction list)
-       - Portfolio XIRR (only tracked funds)
-       - MFTransactions data quality validator
-     - NEW: "Economic Asset Allocation (Look-Through)" subsection
-       - 6 standard buckets definition
-       - Default look-through assumptions
-       - Hidden equity detection
-       - Optional equity style split
-       - Targets sheet for deviation tracking
-     - UPDATED: Excel schema table now includes required + optional sheets
-       - Tables for both required and optional sheets
-       - Column descriptions for MFTransactions, LookThrough, Targets
-   - **For other AIs:** High-level feature overview for end-to-end context
+## Verification Ledger
 
-### 4. **OPERATIONS.md** ✅ UPDATED
-   - **New sections added:** "Transaction Analytics and XIRR" and "Economic Asset Allocation (Look-Through)"
-   - **Changes:**
-     - Transaction Analytics:
-       - XIRR Solver info (file, algorithm, no external deps)
-       - Per-fund analytics fields and calculation details
-       - Portfolio-level analytics (tracked funds only) with example
-       - MFTransactions reconciliation check (tolerance: 0.5%)
-       - Data quality warnings
-     - Economic Allocation:
-       - 6 buckets definition
-       - Classification priority (override → default → unclassified)
-       - Default mix table (Equity, Debt, Hybrid, Arbitrage, Gilt, EPF, PPF, NPS, Cash, Gold)
-       - Why NPS is unclassified (no guess without override)
-       - Equity style split explanation
-       - Hidden equity detection
-       - Target deviation computation
-   - **For other AIs:** Deep operational context, data quality risks, reconciliation requirements
+### Latest regression run
 
-### 5. **DEPLOYMENT.md** ✅ UPDATED
-   - **New section added:** "Workbook Schema" (after Architecture diagram)
-   - **Changes:**
-     - Table of required sheets (6 core sheets with columns and purpose)
-     - Table of optional sheets (MFTransactions, LookThrough, Targets with columns and purpose)
-     - Detailed explanations:
-       - MFTransactions: Type values, Amount computation, invalid type handling
-       - LookThrough: Key, percentage normalization, equity style columns
-       - Targets: AssetClass matching, target allocations, zero-target handling
-     - Workbook validity: "A workbook without optional sheets is valid and supported"
-     - Built-in defaults: How absence of LookThrough/Targets affects computation
-   - **For other AIs:** Exact workbook structure for validation and parsing logic
+Command: `python -m pytest -q`, using the selected Windows Python 3.14.10
+interpreter with Django 5.2.17 and cryptography 50.0.0.
 
-### 6. **CHECKLIST.md** ✅ UPDATED
-   - **New section added:** "10. Workbook Preparation (Optional Advanced Features)"
-   - **Changes:**
-     - MFTransactions sheet guide:
-       - Column definitions (FundIdentifier, Date, Type, Units, NAV)
-       - Amount auto-computation
-       - Date validation (past only)
-       - XIRR requirements (2+ cashflows)
-       - Reconciliation warning detection
-     - LookThrough sheet guide:
-       - Column definitions (Key, Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other, optional equity styles)
-       - Percentage normalization
-       - Override priority explanation
-       - Use case example (hidden equity detection)
-     - Targets sheet guide:
-       - Column definitions (AssetClass, TargetPct)
-       - Deviation computation explanation
-       - Flexibility (doesn't require 100% sum)
-     - Sample workbook generation:
-       - Command: `python generate_sample_excel.py`
-       - Output description
-   - **For other AIs:** Step-by-step guide for workbook preparation with examples
+Result on **2026-10-31**: **231 collected, 230 passed, 1 skipped**.
+The CSV JavaScript test skips because Node is unavailable locally. No coverage
+measurement was run; no percentage is claimed. Counts are dated evidence, not
+permanent expectations for future checkouts.
 
-### 7. **FEATURES_DETAILED.md** ✅ NEW FILE CREATED
-   - **9 comprehensive sections:**
-     1. Part 1: XIRR Solver
-        - Purpose, implementation, algorithm (Newton-Raphson + bisection), examples, edge cases, testing
-     2. Part 2: Transaction Analytics
-        - MFTransactions sheet schema, parsing, calculation engine (per-fund + portfolio), validators, integration, template display
-        - Critical logic: portfolio analytics only includes tracked funds
-     3. Part 3: Economic Asset Allocation
-        - Classification (by product type, defaults)
-        - Override resolution (3-tier priority)
-        - Orchestrator function (aggregation, hidden equity, targets, style split)
-        - Template display (blade, charts, tables)
-     4. Part 4: Example Walkthrough
-        - Realistic input, processing steps, output rendering
-     5. Part 5: Edge Cases and Limitations
-        - XIRR edge cases, MFTransactions reconciliation, Economic Allocation edge cases
-     6. Part 6: Testing Guide
-        - Test files, coverage, running tests, expected results
-     7. Part 7: Troubleshooting
-        - XIRR returns None, reconciliation warnings, NPS classification, negative hidden equity
-     8. Part 8: Future Enhancements
-        - UI, benchmarking, rebalancing, tax-lot tracking, income analysis
-     9. Part 9: API Reference
-        - Quick function reference by file
-   - **For other AIs:** Complete technical deep-dive with algorithms, edge cases, testing strategy
+### Documentation checks
 
-### 8. **CODEBASE_ARCHITECTURE.md** ✅ NEW FILE CREATED
-   - **9 comprehensive sections:**
-     1. Quick Navigation
-        - Directory structure with file annotations (⭐ for new files)
-     2. Complete Data Flow Diagram
-        - From upload → validation → parsing → aggregation → services → rendering
-        - ASCII flow showing XIRR, economic allocation, validators
-     3. New Features: Integration Points
-        - 8 integration points (XIRR, transaction analytics, EA, sheet parsing, validation, aggregation, view, template)
-        - What calls what, input/output, tests
-     4. Feature Interaction: Concrete Example
-        - Realistic scenario with workbook data
-        - Step-by-step processing walkthrough
-        - Expected UI output
-     5. Testing Strategy
-        - Test organization by file
-        - How to run tests (individual, coverage, regression)
-        - Expected results (143 tests passing, 99%+ coverage)
-     6. Common Modification Patterns
-        - How to add new asset class
-        - How to fix XIRR convergence
-        - How to add optional sheet
-     7. Deployment Checklist for Documentation
-        - 8-item checklist for keeping docs in sync with code
-     8. Quick Reference Table
-        - Which file does what (12 rows covering all features)
-     9. Residual Risks and Future Work
-        - Known limitations, planned enhancements
-   - **For other AIs:** Roadmap of codebase, integration patterns, how to extend
-   - **For All Developers:** Quick reference for code locations and modification patterns
+All ten repository Markdown files were checked: local link targets exist,
+fenced code blocks are balanced, and review dates are present. Editor diagnostics
+reported no errors. A targeted consistency scan found no superseded security
+pins, obsolete test/coverage claims, or the corrected parser/date-rule assertions.
+This checks local targets and source consistency, not external URLs or rendered
+Mermaid diagrams.
 
----
+### Audit completion checks
 
-## What Each File Is For
+| Check | Result and boundary |
+|-------|---------------------|
+| Targeted financial/input/storage regressions | Passed; the latest full suite includes the landed tests |
+| Root/domain Terraform validate and format checks | Both passed using the actual executable; backend-disabled initialization and unchanged lockfiles; no apply |
+| Django checks | System checks and migration drift pass; production check reports only HSTS W005/W021 under synthetic configuration |
+| Real-signature JWT regressions | 15 new cases exercise RSA signing, signature verification, required claims and fail-closed behavior; only JWKS retrieval mocked |
+| Private-download limit regressions | Exact-limit success and first-over-limit abort; Google SDK stubbed without external requests |
+| Bandit | No scan errors; 0 high, 11 medium, 2 low, all triaged in DASHBOARD_AUDIT; findings retained without blanket suppressions |
+| Native wheel availability | 10 wheels downloaded for CPython 3.11/manylinux2014_x86_64, including cryptography 50.0.0 |
+| Workflow/settings bucket wiring | Existing Terraform bucket reused for Zappa and history; no new secret |
+| S3 and cleanup behavior | Tested with botocore/CLI stubs, not live S3 writes or deletions |
+| Local browser chart | Desktop 1440px and mobile 390px inspected; 54 demo samples; 3M/6M/1Y date filters checked |
+| Browser CSV helper | Formula prefixes, leading whitespace, quotes and ordinary numeric text exercised |
+| Development dependency audit | Explicit local requirement pins report no known vulnerabilities; not an audit of every globally installed package |
+| Resolved release dependency audit | 65 candidate artifacts, including transitives, report no known vulnerabilities after the cryptography upgrade; Python 3.11.14/manylinux2014 target with a locally built pure-Python placebo wheel |
 
-| File | Audience | Purpose |
-|------|----------|---------|
-| AI_CONTEXT.md | Any AI model | Quick system briefing, file attachment strategy, compact reference |
-| AI_FULL_REPO_PROMPT.md | Any AI model doing deep work | Full AI prompt with operational guidelines, financial invariants, implementation workflow |
-| README.md | Developers, users | Overview, architecture, features, setup, deployment |
-| OPERATIONS.md | DevOps, SREs, advanced users | Runtime behavior, data durability, incident checks, cost profile, known risks |
-| DEPLOYMENT.md | DevOps, setup admins | Workbook schema, prerequisites, phase 1/2 procedures, verification |
-| CHECKLIST.md | Setup admins, users | Zero→running checklist, workbook preparation guide |
-| FEATURES_DETAILED.md | Developers, AI models extending code | Deep technical documentation, algorithms, edge cases, testing |
-| CODEBASE_ARCHITECTURE.md | Developers, AI models modifying code | Codebase structure, data flow, integration patterns, modification guide |
+Security pins are Django 5.2.17, PyJWT 2.15.0, certifi 2026.10.18, urllib3 2.8.0,
+and Werkzeug 3.1.9 in both main requirements files; cryptography 50.0.0 is pinned
+in the native requirements included by deployment. The follow-up resolved scan
+found nine advisory entries in cryptography 46.0.6, prompting that upgrade.
+The scan then passed using `--no-deps --disable-pip` against a generated manifest
+of all downloaded artifact versions, rather than only direct requirement pins.
+Host-dependent markers and actual installed/deployed packages still require
+target-platform validation; advisory results are point-in-time evidence.
 
----
+### Not verified
 
-## Key Information Added to Each Doc
+- No live AWS/Terraform apply, Lambda deployment, production IAM/S3 or Cloudflare
+  validation was performed for these changes.
+- Python 3.11, Node and Docker were not found locally. Ubuntu/Python 3.11 execution,
+  the Node-only CSV regression, and Floci integration remain CI release gates.
+  Native wheel availability was verified, but not actual Lambda native imports.
+- Comprehensive accessibility and performance audits were not performed.
+- JWT tests exercise real cryptography but use synthetic keys and mocked JWKS
+  retrieval; production Cloudflare key fetching/rotation still needs a live check.
+- No measured coverage or exhaustive tax-correctness claim is made. FIFO holding
+  periods use an approximate 365-day rule, not complete asset-specific tax law.
 
-### XIRR Solver Context
-- **AI_CONTEXT.md:** Module reference, pure Python, no external deps
-- **README.md:** Feature overview, per-fund analytics
-- **OPERATIONS.md:** Algorithm, limitations, data quality
-- **CHECKLIST.md:** How to populate MFTransactions sheet
-- **FEATURES_DETAILED.md:** Full algorithm (Newton-Raphson + bisection), edge cases, testing, examples
-- **CODEBASE_ARCHITECTURE.md:** Integration points, data flow, calling functions
+## Follow-up Release Gates
 
-### Economic Allocation Context
-- **AI_CONTEXT.md:** Module reference, 6 buckets, look-through concept
-- **README.md:** Feature overview, bucket types, hidden equity detection
-- **OPERATIONS.md:** Classification priority, defaults, equity style split, targets
-- **DEPLOYMENT.md:** LookThrough sheet schema, override examples
-- **CHECKLIST.md:** How to populate LookThrough sheet with examples
-- **FEATURES_DETAILED.md:** Full classification logic, resolution priority, aggregation algorithms, UI rendering
-- **CODEBASE_ARCHITECTURE.md:** Module structure, integration, data flow
-
-### MFTransactions Sheet Context
-- **AI_CONTEXT.md:** Optional sheet description, columns
-- **README.md:** Optional sheet definition, column headers
-- **OPERATIONS.md:** Reconciliation check, tolerance rules
-- **DEPLOYMENT.md:** Complete schema with notes on Amount computation, Type values
-- **CHECKLIST.md:** Step-by-step guide with examples, reconciliation warning explanation
-- **FEATURES_DETAILED.md:** Parsing logic, calculation integration, validation
-- **CODEBASE_ARCHITECTURE.md:** Parser function reference, test locations
-
-### LookThrough and Targets Sheets Context
-- **AI_CONTEXT.md:** Optional sheet descriptions
-- **README.md:** Column headers, purpose
-- **DEPLOYMENT.md:** Complete schema with examples
-- **CHECKLIST.md:** Preparation guides with examples
-- **FEATURES_DETAILED.md:** Parsing logic, override resolution, target deviation
-- **CODEBASE_ARCHITECTURE.md:** Parser function reference
-
----
-
-## For Other AI Models: Start Here
-
-**Quick start order:**
-
-1. **Tier 1 - Quick Understanding:**
-   - `AI_CONTEXT.md` (Core Prompt section only) — 5 min
-   - `README.md` (Features section) — 5 min
-
-2. **Tier 2 - Feature Context:**
-   - `README.md` (full) — 10 min
-   - `OPERATIONS.md` (XIRR + EA sections) — 10 min
-   - `DEPLOYMENT.md` (Workbook Schema section) — 5 min
-
-3. **Tier 3 - Implementation Details:**
-   - `FEATURES_DETAILED.md` (Part 1–3) — 30 min
-   - `CODEBASE_ARCHITECTURE.md` (Sections 1–4) — 20 min
-
-4. **Tier 4 - Deep Modification:**
-   - `FEATURES_DETAILED.md` (Parts 4–9) — 20 min
-   - `CODEBASE_ARCHITECTURE.md` (Sections 5–9) — 20 min
-   - Source code in `dashboard/services/` — as needed
-
----
-
-## Validation Checklist
-
-✅ All new/updated files reference each other consistently  
-✅ All code file paths are accurate (xirr.py, economic_allocation.py, etc.)  
-✅ All function names match actual implementation  
-✅ All sheet names and column names match parser code  
-✅ All tolerance/threshold values match code (e.g., 0.5% reconciliation tolerance)  
-✅ All examples walkthrough realistic data flow  
-✅ All edge cases documented align with code behavior  
-✅ Testing coverage claims verified (143 tests, ~99% coverage)  
-✅ No broken markdown links  
-✅ No secrets or credentials exposed  
-
----
-
-## What Did NOT Change
-
-- Application security (Cloudflare, JWT, CSRF)
-- Deployment infrastructure (Terraform, Zappa, Phase 1/2)
-- Core portfolio formulas (net worth, alerts, insurance treatment)
-- Existing workbook schema (required 6 sheets)
-- Local development setup
-- Existing tests (backward compatible)
-- Django models or migrations (ephemeral SQLite only)
-
----
-
-## Total Documentation Added
-
-- **FEATURES_DETAILED.md:** ~850 lines (comprehensive feature guide)
-- **CODEBASE_ARCHITECTURE.md:** ~600 lines (integration and modification guide)
-- **AI_CONTEXT.md:** +30 lines (services reference, tier updates)
-- **AI_FULL_REPO_PROMPT.md:** +1 line (financial invariants)
-- **README.md:** +40 lines (feature descriptions, schema table)
-- **OPERATIONS.md:** +50 lines (XIRR + EA operational context)
-- **DEPLOYMENT.md:** +50 lines (workbook schema table + notes)
-- **CHECKLIST.md:** +100 lines (workbook preparation guide with examples)
-
-**Total: ~1,720 lines of new/updated documentation**
-
----
-
-**End of Documentation Updates Summary**
-
-These documentation files are now complete and ready to be fed to any AI model (Claude, GPT, Gemini) for understanding the portfolio dashboard system in full depth.
+Use the checklists in [DEPLOYMENT.md](DEPLOYMENT.md) and
+[CHECKLIST.md](CHECKLIST.md). Run target-runtime validation, re-audit the final
+installed release dependencies, verify origin denial and daily cloud persistence after authorized
+deployment, and keep an independent backup of the history prefix. Review broad
+deployment IAM and shared-state limitations before expanding beyond one user.

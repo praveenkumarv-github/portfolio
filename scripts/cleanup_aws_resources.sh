@@ -226,6 +226,17 @@ delete_iam_policy() {
 
 delete_s3_bucket() {
   local bucket_name="$1"
+  local history_entries
+  if ! history_entries=$(aws s3api list-object-versions --bucket "$bucket_name" \
+      --prefix "net-worth/history/" --max-keys 1 --no-paginate \
+      --query 'length(Versions || DeleteMarkers || `[]`)' --output text); then
+    echo "[ABORT] Could not verify net worth history protection for $bucket_name. Bucket left intact."
+    return 1
+  fi
+  if [[ "$history_entries" != "0" ]]; then
+    echo "[SKIP] Preserving $bucket_name: net worth history or historical versions exist."
+    return 0
+  fi
   echo "[ACTION] Emptying S3 Bucket completely: s3://$bucket_name..."
   
   # 1. Standard recursive delete (handles unversioned files)

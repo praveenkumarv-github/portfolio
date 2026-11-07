@@ -3,6 +3,20 @@ from datetime import date
 import pytest
 
 from dashboard.services.capital_gains import classify_holding_periods
+from dashboard.services.calculation_engine import _fund_transaction_analytics
+
+
+def test_average_cost_uses_remaining_fifo_lots_not_redemption_proceeds():
+    transactions = [
+        {"identifier": "A1", "date": date(2025, 1, 1), "type": "Invested", "units": 60.0, "nav": 10.0, "amount": 600.0},
+        {"identifier": "A1", "date": date(2025, 2, 1), "type": "Invested", "units": 60.0, "nav": 12.0, "amount": 720.0},
+        {"identifier": "A1", "date": date(2025, 3, 1), "type": "Redeemed", "units": 100.0, "nav": 20.0, "amount": 2000.0},
+    ]
+    analytics = _fund_transaction_analytics("A1", transactions, current_value=400, current_nav=20)
+    assert analytics["avg_cost_nav"] == pytest.approx(12)
+    assert analytics["capital_gains"]["remaining_units"] == pytest.approx(20)
+    assert analytics["capital_gains"]["remaining_cost_basis"] == pytest.approx(240)
+    assert analytics["net_invested"] == pytest.approx(-680)
 
 
 class TestFIFOLotMatching:

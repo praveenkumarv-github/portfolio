@@ -64,7 +64,6 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "iam:DetachRolePolicy",
       "iam:PutRolePolicy",
       "iam:DeleteRolePolicy",
-      "iam:PassRole",
       "iam:CreatePolicy",
       "iam:DeletePolicy",
       "iam:GetPolicy",
@@ -92,6 +91,18 @@ data "aws_iam_policy_document" "github_actions_deploy" {
       "tag:UntagResources"
     ]
     resources = ["*"]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.lambda_exec.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["lambda.amazonaws.com"]
+    }
   }
 
   # 1. Explicit S3 Backend State Permissions block

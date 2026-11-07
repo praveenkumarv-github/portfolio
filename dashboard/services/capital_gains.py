@@ -77,6 +77,8 @@ def classify_holding_periods(
 
     return {
         "long_term_threshold_days": LONG_TERM_THRESHOLD_DAYS,
+        "remaining_cost_basis": sum(lot["units"] * lot["nav"] for lot in lots),
+        "remaining_units": sum(lot["units"] for lot in lots),
         "realized_long_term_gain": round(realized_lt_gain, 2),
         "realized_short_term_gain": round(realized_st_gain, 2),
         "realized_long_term_units": round(realized_lt_units, 4),

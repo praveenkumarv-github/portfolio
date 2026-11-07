@@ -1,5 +1,8 @@
 # Full Repository AI Working Prompt
 
+Reviewed against the working tree on **2026-10-31**. For dated verification
+results, see [DOCUMENTATION_UPDATES_SUMMARY.md](DOCUMENTATION_UPDATES_SUMMARY.md).
+
 Use this prompt when the complete repository and these documents are attached:
 
 - `README.md`
@@ -51,6 +54,10 @@ MFTRANSACTIONS CONTRACT
   identifier for an unmatched or ambiguous scheme name; skip it with a warning.
 - Preserve legacy `FundIdentifier` plus `Type` ledgers unless the task explicitly
   removes backward compatibility.
+- Numeric text may contain commas/rupee symbols; supported text dates are
+  explicit formats. Skip malformed/non-finite transaction rows with a warning.
+- Preserve remaining FIFO average cost, finite-number guards, and the XIRR
+  same-date/invalid-input behavior established by the current regression tests.
 
 FACT DISCIPLINE
 - Inspect attached files before drawing conclusions.
@@ -90,21 +97,36 @@ APPLICATION AND SECURITY RULES
 - Preserve safe json_script chart serialization, CSRF-protected mutations,
   managed-path file deletion, generic user-facing errors, secure cookies, HTTPS,
   HSTS, host validation, and XLSX structural/size protections.
+- Preserve bounded public/private Google downloads, validated HTTPS Google
+  identifiers, and formula-neutralized CSV cells.
 - Preserve private Google Drive export and public XLSX fallback behavior unless
   the issue explicitly changes that contract.
 - Google service-account JSON belongs in local process configuration, never
   directly in Lambda environment variables.
 
 STATE RULES
-- Lambda /tmp SQLite, workbooks, caches, and snapshots are ephemeral and not
+- Lambda /tmp SQLite, workbooks, caches, and monthly snapshots are ephemeral and not
   shared across concurrent environments.
-- Do not describe current Lambda application state as durable.
+- Daily history is already durable: NET_WORTH_HISTORY_BUCKET points to the
+  existing private Zappa bucket, prefix net-worth/history/, one JSON object per
+  YYYY-MM-DD. Do not introduce a new bucket or S3 Tables/Iceberg implicitly.
+- Explicit Update Net Worth POST saves the loaded portfolio. Same-day saves
+  replace the current value; S3 versions retain older writes. Cloud dates use
+  Django's time zone (UTC by default); local CSV dates use the computer date.
+- Keep localhost Excel CSV behavior and local-only demo data separate from S3.
+  Never silently fall back from S3 failures to local files or SQLite history.
+- History is shared per deployment, not per user/source. Cold starts can still
+  require reloading a workbook before history can be displayed.
+- Preserve prefix-scoped Lambda permissions and cleanup protection for history
+  versions. Versioning covers deployment artifacts too and is not a backup.
 - Do not add a durable-data service unless the issue requests it and ownership,
   migration, cost, security, backup, and rollback are addressed.
 
 INFRASTRUCTURE OWNERSHIP
 - Terraform owns ACM, API Gateway custom
-  domain/mapping, execution/deployment IAM, GitHub OIDC, and artifact S3.
+  domain/mapping, execution/deployment IAM, GitHub OIDC, and the versioned shared
+  artifact/history S3 bucket. CI PassRole is restricted to the application role
+  and Lambda service; other CI permissions remain broad.
 - Zappa/CloudFormation owns Lambda, REST API/stage/deployment, integration, and
   invoke permission.
 - External/manual ownership includes the Terraform backend bucket, registrar,
@@ -145,7 +167,8 @@ IMPLEMENTATION WORKFLOW
    - Terraform: fmt check, backend-disabled init when needed, validate.
    - Workflows: YAML parse and shell/expression review.
    - Lambda dependencies: CPython 3.11 manylinux2014 x86_64 wheel check.
-   - Documentation: links, fences, commands, and source consistency.
+  - Documentation: links, fences, commands, and source consistency; never copy
+    stale test counts or unsupported coverage percentages into refreshed docs.
 8. Review: inspect the final diff for accidental changes, secrets, generated
    files, and ownership violations.
 9. Report: summarize root cause, changed files, validation results, and residual
@@ -180,7 +203,7 @@ Do not summarize every attached file. Confirm in no more than six bullets:
 - financial invariant;
 - Terraform versus Zappa ownership;
 - Phase 1 -> Zappa -> Phase 2 deployment model;
-- ephemeral Lambda state;
+- ephemeral Lambda workbooks/SQLite versus durable daily S3 history;
 - readiness to receive the issue.
 Then process the issue included after this prompt. If no issue is included, wait
 for it without generating a plan.

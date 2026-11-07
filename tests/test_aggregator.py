@@ -5,6 +5,24 @@ import pytest
 
 @pytest.mark.django_db
 class TestAggregator:
+    def test_partial_workbook_does_not_overwrite_existing_snapshot(self, tmp_path):
+        from dashboard.models import NetWorthSnapshot
+        from dashboard.services.aggregator import build_dashboard_context, clear_dashboard_cache
+        from datetime import datetime
+
+        clear_dashboard_cache()
+        path = tmp_path / "partial.xlsx"
+        path.write_text("dummy", encoding="utf-8")
+        month = datetime.now().strftime("%Y-%m")
+        NetWorthSnapshot.objects.create(month=month, total_net_worth=1000000)
+        result = {"success": True, "data": {"liquid_total": 100}, "errors": ["MutualFunds: Missing columns"], "warnings": []}
+        with patch("dashboard.services.aggregator.parse_excel_file", return_value=result):
+            context = build_dashboard_context(str(path))
+        assert context["portfolio"].net_worth == 100
+        assert context["errors"] == result["errors"]
+        assert NetWorthSnapshot.objects.get(month=month).total_net_worth == 1000000
+        assert len(context["snapshots"]) == 1
+
     def test_build_dashboard_context_uses_mtime_cache(self, tmp_path):
         from dashboard.services.aggregator import build_dashboard_context, clear_dashboard_cache
 

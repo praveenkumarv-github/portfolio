@@ -1,5 +1,8 @@
 # Zero → running app: crisp checklist
 
+Reviewed **2026-10-31**. Checkboxes are operator tasks, not recorded deployment
+results. See [README.md](README.md) for the canonical setup and storage contract.
+
 ## 0. External accounts
 
 - [ ] Register a domain (e.g. `karynxt.xyz`).
@@ -92,6 +95,10 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 ## 6. Phase 1 — Baseline + Lambda
 
 - [ ] Actions → **Phase 1 - Deploy Infrastructure and Lambda** → Run workflow → `zappa_stage=production` → wait ✓.
+- [ ] Confirm the existing private Zappa bucket is versioned and Lambda has
+  prefix-scoped history access. `NET_WORTH_HISTORY_BUCKET` is populated by the
+  settings patcher; no new bucket or GitHub secret is required.
+- [ ] Confirm CI PassRole permits only the application role and Lambda service.
 
 ## 7. Phase 2 — DNS + custom domain
 
@@ -102,6 +109,13 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 - [ ] `https://finance.<your-domain>/` → Cloudflare login → Google sign-in → dashboard loads.
 - [ ] `curl -i https://<api-id>.execute-api.ap-south-1.amazonaws.com/production/` → **HTTP 403**.
 - [ ] Upload sample XLSX or paste a public Google Sheet URL → portfolio renders.
+- [ ] Click **Update Net Worth**; verify today's `net-worth/history/YYYY-MM-DD.json`
+  in the existing bucket and the date/value on the chart after reload.
+- [ ] Reload changed Sheet data before saving. Same-day saves replace the value;
+  cloud dates use UTC unless Django's time zone is changed.
+- [ ] Check that cloud demo actions are unavailable and failed storage writes
+  show errors, not success messages.
+- [ ] Locally, verify `cache/net_worth.csv` and the separate demo-year CSV.
 
 ## 9. Everyday ops
 
@@ -109,6 +123,9 @@ terraform -chdir=infra output github_actions_role_arn   # copy this
 - Cert / DNS / mapping change: **Phase 2**.
 - Rollback: `zappa rollback production -n 1`.
 - Teardown: **Destroy Lambda App** workflow (type `DESTROY`).
+- Back up daily S3 history independently; the destroy workflow retains the base
+  bucket, and the cleanup helper skips buckets containing history versions.
+- Refreshing a page does not save daily history or reload the original Sheet.
 
 ## 10. Workbook Preparation (Optional Advanced Features)
 
@@ -128,8 +145,12 @@ Track SIP or lump-sum investments per mutual fund to enable XIRR, absolute retur
 
 - The parser resolves Scheme Name to the corresponding MutualFunds Identifier.
 - Amount is auto-computed as `Units × NAV` when it is omitted.
-- All dates must be in the past (≤ today) for XIRR to solve.
-- At least 2 cashflows (e.g., 1 investment + current value) are required for a meaningful XIRR.
+- Use actual transaction dates, not projected cashflows. The parser does not
+  enforce a no-future-date rule, so review the ledger before relying on returns.
+- XIRR requires positive and negative cashflows on at least two distinct dates;
+  same-date-only and invalid/unsolvable inputs return no rate.
+- Units and NAV must be positive finite values; Amount must be finite and
+  non-negative. Invalid rows are skipped with a warning.
 - The validator warns if a fund's total (Invested - Redeemed) units don't match its declared Units; fix the ledger to avoid gain/XIRR inaccuracy.
 - Legacy `FundIdentifier` + `Type` sheets remain accepted, but new rows should use this Scheme Name format.
 
@@ -150,7 +171,7 @@ Declare the underlying economic mix of funds and retirement instruments to see "
 | (Optional) EquitySmall | Number | 15 | Small cap % |
 | (Optional) EquityIntl | Number | 0 | International % |
 
-- Percentages are normalized to 100 by the parser.
+- Positive percentages are normalized to 100 by the economic allocation engine.
 - Without overrides, defaults are used: Equity Funds → 100% Equity; Debt Funds → 100% Corporate Debt; Hybrid → 60/40; EPF → 85% Govt Sec / 15% Equity; NPS → Unclassified (no guess).
 - Use this sheet to surface hidden equity (e.g., EPF's 15%, arbitrage fund's 20% equity slice).
 
@@ -174,4 +195,14 @@ python generate_sample_excel.py
 ```
 
 Output: `sample_finance_data.xlsx` with 6 required sheets + 12-month SIP example + NPS override + Targets.
+
+## 11. Pre-release checks
+
+- [ ] Run `python manage.py check`, migration drift check, and `python -m pytest -q`.
+- [ ] Run `pip-audit` against both requirements files; inspect transitive and
+  deployed dependencies separately rather than assuming a pin scan covers them.
+- [ ] Run backend-disabled Terraform initialization, `validate`, and format checks.
+- [ ] Check browser CSV exports neutralize formula-like labels and the chart
+  remains usable on desktop/mobile.
+- [ ] Review remaining risks in [DASHBOARD_AUDIT.md](DASHBOARD_AUDIT.md).
 

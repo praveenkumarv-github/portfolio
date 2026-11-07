@@ -1,6 +1,9 @@
 import io
 import os
+import sys
 import zipfile
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -18,8 +21,8 @@ class _FakeResponse:
     def __init__(self, payload: bytes):
         self._payload = payload
 
-    def read(self):
-        return self._payload
+    def read(self, size=-1):
+        return self._payload if size < 0 else self._payload[:size]
 
     def __enter__(self):
         return self
@@ -49,6 +52,73 @@ def test_extract_google_sheet_id_from_query_param_url():
 def test_extract_google_sheet_id_invalid_url_raises():
     with pytest.raises(ValueError):
         extract_google_sheet_id("https://example.com/not-a-sheet")
+
+
+@pytest.mark.parametrize("url", [
+    "http://docs.google.com/spreadsheets/d/abc/edit",
+    "https://docs.google.com/spreadsheets/u/0/?id=abc%2F..%2F..%2Fredirect",
+    "https://docs.google.com/spreadsheets/u/0/?id=abc%3Fother=value",
+    "https://docs.google.com/spreadsheets/d/abc%3Fother=value",
+    "https://docs.google.com/unrelated?id=abc",
+    "https://docs.google.com.evil.example/spreadsheets/d/abc/edit",
+])
+def test_sheet_url_rejects_noncanonical_hosts_and_identifiers(url):
+    with pytest.raises(ValueError):
+        extract_google_sheet_id(url)
+
+
+def test_public_download_is_bounded_before_workbook_validation(monkeypatch):
+    from dashboard.services import google_sheet_service
+    from dashboard.services.workbook_validation import MAX_XLSX_BYTES
+
+    class OversizedResponse(_FakeResponse):
+        def read(self, size=-1):
+            assert size == MAX_XLSX_BYTES + 1
+            return b"x" * size
+
+    monkeypatch.setattr(google_sheet_service, "urlopen", lambda req, timeout: OversizedResponse(b""))
+    with pytest.raises(GoogleSheetError, match="10 MB"):
+        google_sheet_service._fetch_public("abc")
+
+
+@pytest.mark.parametrize("chunk_sizes,oversized", [([4, 4], False), ([4, 4, 1, 1], True)])
+def test_private_download_stops_when_size_limit_exceeded(monkeypatch, chunk_sizes, oversized):
+    from dashboard.services import google_sheet_service
+
+    calls = []
+
+    class FakeDownloader:
+        def __init__(self, buffer, request, chunksize):
+            assert chunksize == 64 * 1024
+            self.buffer = buffer
+
+        def next_chunk(self):
+            size = chunk_sizes[len(calls)]
+            self.buffer.write(b"x" * size)
+            calls.append(size)
+            return None, len(calls) == len(chunk_sizes)
+
+    monkeypatch.setattr(google_sheet_service, "MAX_XLSX_BYTES", 8)
+    monkeypatch.setattr(google_sheet_service, "_load_service_account_json", lambda: "{}")
+    modules = {
+        "google": {},
+        "google.oauth2": {"service_account": SimpleNamespace(Credentials=MagicMock())},
+        "googleapiclient": {},
+        "googleapiclient.discovery": {"build": MagicMock()},
+        "googleapiclient.http": {"MediaIoBaseDownload": FakeDownloader},
+    }
+    for module_name, attributes in modules.items():
+        module = ModuleType(module_name)
+        vars(module).update(attributes)
+        monkeypatch.setitem(sys.modules, module_name, module)
+
+    if oversized:
+        with pytest.raises(GoogleSheetError, match="10 MB"):
+            google_sheet_service._fetch_private("synthetic-sheet")
+        assert calls == [4, 4, 1]
+    else:
+        assert google_sheet_service._fetch_private("synthetic-sheet") == b"x" * 8
+        assert calls == [4, 4]
 
 
 def test_public_sheet_without_service_account(monkeypatch):
