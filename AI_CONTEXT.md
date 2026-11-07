@@ -1,303 +1,303 @@
-# AI Repository Context
+  # AI Repository Context
 
-Reviewed against the working tree on **2026-10-31**. Local implementation and
-validation do not establish deployment status.
+  Reviewed against the working tree on **2026-10-31**. Local implementation and
+  validation do not establish deployment status.
 
-Provider-neutral briefing for Gemini, Claude, ChatGPT, or another coding model.
-It is intentionally compact to conserve free-tier context and output tokens.
+  Provider-neutral briefing for Gemini, Claude, ChatGPT, or another coding model.
+  It is intentionally compact to conserve free-tier context and output tokens.
 
-## How To Use
+  ## How To Use
 
-1. Copy only the block under **Core Prompt** into a new chat.
-2. Attach files from the smallest relevant tier under **Attachment Strategy**.
-3. Append your task using the short template at the end.
-4. Do not ask the model to repeat this document; ask it to act on the task.
+  1. Copy only the block under **Core Prompt** into a new chat.
+  2. Attach files from the smallest relevant tier under **Attachment Strategy**.
+  3. Append your task using the short template at the end.
+  4. Do not ask the model to repeat this document; ask it to act on the task.
 
-When attaching the full repository for an ongoing issue-fixing session, use the
-more detailed [AI_FULL_REPO_PROMPT.md](AI_FULL_REPO_PROMPT.md) instead.
+  When attaching the full repository for an ongoing issue-fixing session, use the
+  more detailed [AI_FULL_REPO_PROMPT.md](AI_FULL_REPO_PROMPT.md) instead.
 
-## Core Prompt
+  ## Core Prompt
 
-```text
-Repository: praveenkumarv-github/portfolio
-Branch: fea-v2
+  ```text
+  Repository: praveenkumarv-github/portfolio
+  Branch: fea-v2
 
-ROLE
-Act as a senior engineer for this repository. Use attached source and tests as
-truth. Documentation explains intent; when docs conflict with code/tests, report
-the conflict and follow code/tests. Do not invent resources, settings, command
-results, or successful cloud operations.
+  ROLE
+  Act as a senior engineer for this repository. Use attached source and tests as
+  truth. Documentation explains intent; when docs conflict with code/tests, report
+  the conflict and follow code/tests. Do not invent resources, settings, command
+  results, or successful cloud operations.
 
-APP
-Single-user Django personal-finance dashboard with transaction analytics and
-economic asset allocation. Input is a local XLSX workbook or Google Sheet.
-It resolves mutual-fund NAV and metal prices, calculates portfolio values/
-alerts, computes per-fund and portfolio XIRR from transaction ledgers, maps
-holdings to economic asset-class buckets (with look-through for hybrid/EPF),
-and renders interactive charts. Local runtime is Windows-compatible; target
-runtime is Python 3.11 on Ubuntu CI and AWS Lambda.
+  APP
+  Single-user Django personal-finance dashboard with transaction analytics and
+  economic asset allocation. Input is a local XLSX workbook or Google Sheet.
+  It resolves mutual-fund NAV and metal prices, calculates portfolio values/
+  alerts, computes per-fund and portfolio XIRR from transaction ledgers, maps
+  holdings to economic asset-class buckets (with look-through for hybrid/EPF),
+  and renders interactive charts. Local runtime is Windows-compatible; target
+  runtime is Python 3.11 on Ubuntu CI and AWS Lambda.
 
-CRITICAL INVARIANT
-Unless explicitly requested, do not change financial formulas, workbook schema
-semantics, aggregation, allocation, net-worth treatment, alert rules, XIRR
-computation, or economic bucket classification logic.
+  CRITICAL INVARIANT
+  Unless explicitly requested, do not change financial formulas, workbook schema
+  semantics, aggregation, allocation, net-worth treatment, alert rules, XIRR
+  computation, or economic bucket classification logic.
 
-RUNTIME
-- Django 5.2.17 / PyJWT 2.15.0; local settings: finance_dashboard.settings.
-- Lambda settings: finance_dashboard.settings_lambda.
-- Lambda entry: finance_dashboard.wsgi_lambda.application.
-- Zappa identity: project portfolio, stage production, function/stack prefix
-  portfolio-production.
-- API Gateway invokes Lambda; Cloudflare Access protects the custom hostname.
-- Django verifies the Cloudflare RS256 JWT at origin: signature, issuer,
-  audience, expiry, required claims, and exact allowed email.
-- Raw API Gateway access without a valid Access JWT must return HTTP 403.
+  RUNTIME
+  - Django 5.2.17 / PyJWT 2.15.0; local settings: finance_dashboard.settings.
+  - Lambda settings: finance_dashboard.settings_lambda.
+  - Lambda entry: finance_dashboard.wsgi_lambda.application.
+  - Zappa identity: project portfolio, stage production, function/stack prefix
+    portfolio-production.
+  - API Gateway invokes Lambda; Cloudflare Access protects the custom hostname.
+  - Django verifies the Cloudflare RS256 JWT at origin: signature, issuer,
+    audience, expiry, required claims, and exact allowed email.
+  - Raw API Gateway access without a valid Access JWT must return HTTP 403.
 
-INPUT AND DATA
-- Workbook sheets:
-  - Required: MutualFunds, Retirement, Liquid, EmergencyFund, Insurance, Metals.
-  - Optional: MFTransactions (SIP/lump-sum ledger per fund, powers XIRR/gain),
-    LookThrough (economic look-through overrides), Targets (target allocation %).
-  - Insurance coverage is excluded from net worth.
-- XLSX limits: 10 MB compressed, 100 MB expanded, 2,000 ZIP entries; reject
-  empty, encrypted, malformed, or disguised files.
-- MFTransactions preferred columns: Scheme Name, Transaction Type, Units, NAV,
-  Amount, Date. Scheme Name is matched (case/whitespace-insensitively) to
-  MutualFunds.FundName and stored against its Identifier. Transaction Type
-  accepts PURCHASE/REDEEM (also Invested/Redeemed for legacy sheets). Amount
-  is optional and auto-computed as Units × NAV when absent.
-- Transaction numeric text accepts commas/rupee symbols; dates accept Excel
-  dates and explicit text formats. Invalid/non-positive Units or NAV, negative
-  Amount, and non-finite transaction values are skipped with warnings.
-- Reject non-finite portfolio values before snapshots/chart data. Remaining
-  average cost is remaining FIFO cost / remaining FIFO units. XIRR returns None
-  for same-date-only, non-finite, invalid-guess, or unsolvable inputs.
-- LookThrough columns: Key (fund Identifier or instrument Type), six buckets
-  (Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other), optional equity
-  style split (EquityLarge, EquityMid, EquitySmall, EquityIntl).
-- Targets columns: AssetClass, TargetPct. Used to compute deviation in
-  Economic Allocation blade.
-- NAV: AMFI primary, MFAPI fallback.
-- Metals: fresh cache/manual override, live GoodReturns, stale cache, then zero
-  defaults for both gold and silver with a warning.
-- Google Sheets: private Drive export first when credentials exist; public XLSX
-  export fallback where possible.
-- Local Google credentials: GOOGLE_SERVICE_ACCOUNT_JSON.
-- Google URLs require HTTPS and validated IDs; exports enforce the 10 MB limit
-  while downloading. CSV exports quote cells and neutralize formula-like text.
+  INPUT AND DATA
+  - Workbook sheets:
+    - Required: MutualFunds, Retirement, Liquid, EmergencyFund, Insurance, Metals.
+    - Optional: MFTransactions (SIP/lump-sum ledger per fund, powers XIRR/gain),
+      LookThrough (economic look-through overrides), Targets (target allocation %).
+    - Insurance coverage is excluded from net worth.
+  - XLSX limits: 10 MB compressed, 100 MB expanded, 2,000 ZIP entries; reject
+    empty, encrypted, malformed, or disguised files.
+  - MFTransactions preferred columns: Scheme Name, Transaction Type, Units, NAV,
+    Amount, Date. Scheme Name is matched (case/whitespace-insensitively) to
+    MutualFunds.FundName and stored against its Identifier. Transaction Type
+    accepts PURCHASE/REDEEM (also Invested/Redeemed for legacy sheets). Amount
+    is optional and auto-computed as Units × NAV when absent.
+  - Transaction numeric text accepts commas/rupee symbols; dates accept Excel
+    dates and explicit text formats. Invalid/non-positive Units or NAV, negative
+    Amount, and non-finite transaction values are skipped with warnings.
+  - Reject non-finite portfolio values before snapshots/chart data. Remaining
+    average cost is remaining FIFO cost / remaining FIFO units. XIRR returns None
+    for same-date-only, non-finite, invalid-guess, or unsolvable inputs.
+  - LookThrough columns: Key (fund Identifier or instrument Type), six buckets
+    (Equity, CorporateDebt, GovtSecurities, Cash, Gold, Other), optional equity
+    style split (EquityLarge, EquityMid, EquitySmall, EquityIntl).
+  - Targets columns: AssetClass, TargetPct. Used to compute deviation in
+    Economic Allocation blade.
+  - NAV: AMFI primary, MFAPI fallback.
+  - Metals: fresh cache/manual override, live GoodReturns, stale cache, then zero
+    defaults for both gold and silver with a warning.
+  - Google Sheets: private Drive export first when credentials exist; public XLSX
+    export fallback where possible.
+  - Local Google credentials: GOOGLE_SERVICE_ACCOUNT_JSON.
+  - Google URLs require HTTPS and validated IDs; exports enforce the 10 MB limit
+    while downloading. CSV exports quote cells and neutralize formula-like text.
 
-STATE
-Lambda /tmp is ephemeral and per execution environment:
-- SQLite: /tmp/db.sqlite3
-- Workbook: /tmp/media
-- Caches: /tmp/cache
-Cold starts can lose workbook/SQLite state; concurrent Lambdas do not share it.
-Daily history is separate and durable on Lambda:
-- Explicit POST Update Net Worth saves the loaded value, not a scheduled refresh.
-- Local localhost Excel mode: cache/net_worth.csv, using the computer date.
-- Lambda: NET_WORTH_HISTORY_BUCKET is set from Terraform's existing Zappa bucket;
-  net-worth/history/YYYY-MM-DD.json, using Django's time zone (currently UTC).
-- Same-day writes replace the value; S3 versioning retains earlier versions.
-- Shared per deployment, not per workbook/user. Reload source data after cold
-  start before displaying history. Read failures must not silently fall back.
-- Local-only demo CSV has 54 sample dates over one year; never write demo to S3.
-- Legacy monthly SQLite snapshots are not migrated and are not overwritten
-  when the parsed workbook reports errors.
+  STATE
+  Lambda /tmp is ephemeral and per execution environment:
+  - SQLite: /tmp/db.sqlite3
+  - Workbook: /tmp/media
+  - Caches: /tmp/cache
+  Cold starts can lose workbook/SQLite state; concurrent Lambdas do not share it.
+  Daily history is separate and durable on Lambda:
+  - Explicit POST Update Net Worth saves the loaded value, not a scheduled refresh.
+  - Local localhost Excel mode: cache/net_worth.csv, using the computer date.
+  - Lambda: NET_WORTH_HISTORY_BUCKET is set from Terraform's existing Zappa bucket;
+    net-worth/history/YYYY-MM-DD.json, using Django's time zone (currently UTC).
+  - Same-day writes replace the value; S3 versioning retains earlier versions.
+  - Shared per deployment, not per workbook/user. Reload source data after cold
+    start before displaying history. Read failures must not silently fall back.
+  - Local-only demo CSV has 54 sample dates over one year; never write demo to S3.
+  - Legacy monthly SQLite snapshots are not migrated and are not overwritten
+    when the parsed workbook reports errors.
 
-RESOURCE OWNERSHIP
-- Terraform: ACM, API Gateway custom domain/mapping,
-  Lambda execution IAM, GitHub OIDC IAM, encrypted/versioned Zappa bucket shared
-  with daily history. Lambda GetObject/PutObject and listing are prefix-scoped.
-- Zappa/CloudFormation: Lambda, REST API/stage/deployment, integration, invoke
-  permission.
-- External/manual: Terraform backend S3 bucket, registrar, Cloudflare zone and
-  Access app, Google identity/service account. Phase 2 manages Cloudflare DNS
-  through a zone-scoped API token.
-Never assign one resource to both Terraform and Zappa.
+  RESOURCE OWNERSHIP
+  - Terraform: ACM, API Gateway custom domain/mapping,
+    Lambda execution IAM, GitHub OIDC IAM, encrypted/versioned Zappa bucket shared
+    with daily history. Lambda GetObject/PutObject and listing are prefix-scoped.
+  - Zappa/CloudFormation: Lambda, REST API/stage/deployment, integration, invoke
+    permission.
+  - External/manual: Terraform backend S3 bucket, registrar, Cloudflare zone and
+    Access app, Google identity/service account. Phase 2 manages Cloudflare DNS
+    through a zone-scoped API token.
+  Never assign one resource to both Terraform and Zappa.
 
-DEPLOYMENT
-0. External encrypted/versioned Terraform state bucket exists.
-1. Bootstrap the backend and GitHub OIDC role locally once.
-2. Configure GitHub secrets/variables.
-3. Phase 1 validates/applies baseline Terraform, patches the S3 history bucket
-  into Lambda settings, and deploys or updates Zappa. No new bucket is needed.
-4. Ubuntu Validate workflow runs Django checks, pytest, Terraform checks, and
-   CPython 3.11 manylinux2014 x86_64 wheel checks.
-5. Phase 2 publishes ACM validation DNS in Cloudflare, discovers the Zappa API
-  ID, applies the independent domain Terraform state, and publishes the
-  proxied dashboard CNAME.
-6. Verify Cloudflare Access, the custom hostname, and raw API denial.
-Terraform requires >=1.10 and uses a native S3 lockfile. Windows tests do not
-prove Ubuntu or Amazon Linux compatibility.
+  DEPLOYMENT
+  0. External encrypted/versioned Terraform state bucket exists.
+  1. Bootstrap the backend and GitHub OIDC role locally once.
+  2. Configure GitHub secrets/variables.
+  3. Phase 1 validates/applies baseline Terraform, patches the S3 history bucket
+    into Lambda settings, and deploys or updates Zappa. No new bucket is needed.
+  4. Ubuntu Validate workflow runs Django checks, pytest, Terraform checks, and
+    CPython 3.11 manylinux2014 x86_64 wheel checks.
+  5. Phase 2 publishes ACM validation DNS in Cloudflare, discovers the Zappa API
+    ID, applies the independent domain Terraform state, and publishes the
+    proxied dashboard CNAME.
+  6. Verify Cloudflare Access, the custom hostname, and raw API denial.
+  Terraform requires >=1.10 and uses a native S3 lockfile. Windows tests do not
+  prove Ubuntu or Amazon Linux compatibility.
 
-KEY SERVICES
-- xirr.py: Pure-Python XIRR solver (Newton-Raphson + bisection) for annualized
-  returns from irregular cashflows.
-- economic_allocation.py: Maps all holdings to 6 standard asset-class buckets
-  (Equity, Debt, Govt Sec, Cash, Gold, Other) with look-through overrides and
-  hidden-equity detection.
-- excel_parser.py: Parses required sheets (MutualFunds, Retirement, Liquid, etc.)
-  and optional sheets (MFTransactions, LookThrough, Targets).
-- calculation_engine.py: Per-fund and portfolio XIRR/gain analytics from
-  transaction ledgers.
-- validators.py: MFTransactions unit reconciliation check (warns on mismatch).
-- capital_gains.py: FIFO lots, remaining cost basis, holding-period gain splits;
-  not a tax-liability calculator.
-- net_worth_history.py: atomic local CSV writes, paginated S3 reads, one S3
-  object per date, local-only demo generation.
-- See FEATURES_DETAILED.md for full implementation guide (algorithms,
-  edge cases, testing).
+  KEY SERVICES
+  - xirr.py: Pure-Python XIRR solver (Newton-Raphson + bisection) for annualized
+    returns from irregular cashflows.
+  - economic_allocation.py: Maps all holdings to 6 standard asset-class buckets
+    (Equity, Debt, Govt Sec, Cash, Gold, Other) with look-through overrides and
+    hidden-equity detection.
+  - excel_parser.py: Parses required sheets (MutualFunds, Retirement, Liquid, etc.)
+    and optional sheets (MFTransactions, LookThrough, Targets).
+  - calculation_engine.py: Per-fund and portfolio XIRR/gain analytics from
+    transaction ledgers.
+  - validators.py: MFTransactions unit reconciliation check (warns on mismatch).
+  - capital_gains.py: FIFO lots, remaining cost basis, holding-period gain splits;
+    not a tax-liability calculator.
+  - net_worth_history.py: atomic local CSV writes, paginated S3 reads, one S3
+    object per date, local-only demo generation.
+  - See FEATURES_DETAILED.md for full implementation guide (algorithms,
+    edge cases, testing).
 
-SECURITY RULES
-- Production fails closed without DJANGO_SECRET_KEY, ALLOWED_HOSTS, or explicit
-  Cloudflare mode and required values when enabled.
-- Preserve HTTPS redirect, HSTS, secure cookies, CSRF-protected mutations,
-  origin JWT validation, safe json_script serialization, and managed-path file
-  deletion.
-- Preserve CSV formula neutralization, finite-number checks, and download caps.
-- CI PassRole is scoped to the application role/Lambda service. Other CI IAM
-  permissions remain broad; do not describe them as fully least-privileged.
-- Cleanup skips buckets containing net-worth history versions; versioning is
-  not a backup against administrative deletion.
-- Never expose credentials, Sheet IDs, financial data, or raw exceptions.
-- Do not run live, destructive, AWS, GitHub, Cloudflare, or Google operations
-  without explicit approval.
+  SECURITY RULES
+  - Production fails closed without DJANGO_SECRET_KEY, ALLOWED_HOSTS, or explicit
+    Cloudflare mode and required values when enabled.
+  - Preserve HTTPS redirect, HSTS, secure cookies, CSRF-protected mutations,
+    origin JWT validation, safe json_script serialization, and managed-path file
+    deletion.
+  - Preserve CSV formula neutralization, finite-number checks, and download caps.
+  - CI PassRole is scoped to the application role/Lambda service. Other CI IAM
+    permissions remain broad; do not describe them as fully least-privileged.
+  - Cleanup skips buckets containing net-worth history versions; versioning is
+    not a backup against administrative deletion.
+  - Never expose credentials, Sheet IDs, financial data, or raw exceptions.
+  - Do not run live, destructive, AWS, GitHub, Cloudflare, or Google operations
+    without explicit approval.
 
-WORK STYLE
-1. Read the nearest owning source and focused tests before changing anything.
-2. Keep changes minimal and consistent with existing patterns.
-3. For deployment changes, trace Phase 1 -> Zappa -> API ID -> Phase 2.
-4. Separate verified facts from assumptions and live-cloud unknowns.
-5. Validate the narrow behavior first, then broader checks as risk requires.
-6. Reply concisely with findings/changes, validation, and residual risks. Do not
-   restate this briefing unless asked.
-```
+  WORK STYLE
+  1. Read the nearest owning source and focused tests before changing anything.
+  2. Keep changes minimal and consistent with existing patterns.
+  3. For deployment changes, trace Phase 1 -> Zappa -> API ID -> Phase 2.
+  4. Separate verified facts from assumptions and live-cloud unknowns.
+  5. Validate the narrow behavior first, then broader checks as risk requires.
+  6. Reply concisely with findings/changes, validation, and residual risks. Do not
+    restate this briefing unless asked.
+  ```
 
-## Architecture Mind Map
+  ## Architecture Mind Map
 
-Use this for visual understanding; omit it from the chat when token limits are
-tight because the **Core Prompt** already contains the same facts.
+  Use this for visual understanding; omit it from the chat when token limits are
+  tight because the **Core Prompt** already contains the same facts.
 
-```mermaid
-mindmap
-  root((Portfolio Dashboard))
-    App
-      Django 5.2
-      Python 3.11 target
-      XLSX and Google Sheets
-      NAV and metal services
-      Calculation engine
-        Preserve formulas
-        Preserve alerts
-    Security
-      Cloudflare Access
-      Origin JWT verification
-      Exact email
-      Secure Django settings
-      XLSX validation
-      CSRF and safe JSON
-    Runtime
-      API Gateway
-      Zappa Lambda
-        portfolio-production
-        1536 MB
-        30 seconds
-        3 GB /tmp
-      Ephemeral SQLite and files
-      Durable daily S3 history
-    Ownership
-      Terraform
-        ACM and custom domain
-        IAM and OIDC
-        Versioned S3 artifact and history bucket
-      Zappa
-        Lambda
-        REST API and stage
-        Integration
-      External
-        State bucket
-        Cloudflare
-        Registrar
-        Google identity
-    Delivery
-      Ubuntu validation
-      Terraform Phase 1
-      Zappa deploy or update
-      API ID validation
-      Terraform Phase 2
-      Controlled destroy
-```
+  ```mermaid
+  mindmap
+    root((Portfolio Dashboard))
+      App
+        Django 5.2
+        Python 3.11 target
+        XLSX and Google Sheets
+        NAV and metal services
+        Calculation engine
+          Preserve formulas
+          Preserve alerts
+      Security
+        Cloudflare Access
+        Origin JWT verification
+        Exact email
+        Secure Django settings
+        XLSX validation
+        CSRF and safe JSON
+      Runtime
+        API Gateway
+        Zappa Lambda
+          portfolio-production
+          1536 MB
+          30 seconds
+          3 GB /tmp
+        Ephemeral SQLite and files
+        Durable daily S3 history
+      Ownership
+        Terraform
+          ACM and custom domain
+          IAM and OIDC
+          Versioned S3 artifact and history bucket
+        Zappa
+          Lambda
+          REST API and stage
+          Integration
+        External
+          State bucket
+          Cloudflare
+          Registrar
+          Google identity
+      Delivery
+        Ubuntu validation
+        Terraform Phase 1
+        Zappa deploy or update
+        API ID validation
+        Terraform Phase 2
+        Controlled destroy
+  ```
 
-## Attachment Strategy
+  ## Attachment Strategy
 
-Do not attach the whole repository by default. More files consume context and
-can reduce answer quality.
+  Do not attach the whole repository by default. More files consume context and
+  can reduce answer quality.
 
-### Tier 1: Most Tasks
+  ### Tier 1: Most Tasks
 
-Attach the **Core Prompt**, the file to change, and its closest test. Add
-`README.md` only when architecture context is needed. For XIRR or transaction
-analytics tasks, attach `FEATURES_DETAILED.md`. For codebase structure and
-integration, attach `CODEBASE_ARCHITECTURE.md`.
+  Attach the **Core Prompt**, the file to change, and its closest test. Add
+  `README.md` only when architecture context is needed. For XIRR or transaction
+  analytics tasks, attach `FEATURES_DETAILED.md`. For codebase structure and
+  integration, attach `CODEBASE_ARCHITECTURE.md`.
 
-### Tier 2: Application or Security
+  ### Tier 2: Application or Security
 
-- `dashboard/views.py`
-- Relevant files from `dashboard/services/`:
-  - `xirr.py` (XIRR solver)
-  - `economic_allocation.py` (asset allocation engine)
-  - `excel_parser.py` (sheet parsing, including MFTransactions/LookThrough/Targets)
-  - `calculation_engine.py` (per-fund and portfolio analytics)
-  - `validators.py` (MFTransactions reconciliation)
-  - `aggregator.py` (orchestration)
-  - `net_worth_history.py` (CSV/S3 daily history)
-  - `capital_gains.py` (FIFO remaining cost and holding periods)
-  - Other services as relevant
-- `finance_dashboard/settings.py`
-- `finance_dashboard/settings_lambda.py`
-- `finance_dashboard/middleware.py`
-- Relevant tests only
+  - `dashboard/views.py`
+  - Relevant files from `dashboard/services/`:
+    - `xirr.py` (XIRR solver)
+    - `economic_allocation.py` (asset allocation engine)
+    - `excel_parser.py` (sheet parsing, including MFTransactions/LookThrough/Targets)
+    - `calculation_engine.py` (per-fund and portfolio analytics)
+    - `validators.py` (MFTransactions reconciliation)
+    - `aggregator.py` (orchestration)
+    - `net_worth_history.py` (CSV/S3 daily history)
+    - `capital_gains.py` (FIFO remaining cost and holding periods)
+    - Other services as relevant
+  - `finance_dashboard/settings.py`
+  - `finance_dashboard/settings_lambda.py`
+  - `finance_dashboard/middleware.py`
+  - Relevant tests only
 
-### Tier 3: Infrastructure or Deployment
+  ### Tier 3: Infrastructure or Deployment
 
-- `.github/workflows/validate.yml`
-- `.github/workflows/deploy-lambda.yml`
-- `.github/workflows/destroy.yml`
-- Relevant `infra/*.tf` files
-- `zappa_settings.json`
-- `scripts/patch_zappa_settings.py`
-- `tests/test_patch_zappa_settings.py`
-- `README.md` deployment section when needed
+  - `.github/workflows/validate.yml`
+  - `.github/workflows/deploy-lambda.yml`
+  - `.github/workflows/destroy.yml`
+  - Relevant `infra/*.tf` files
+  - `zappa_settings.json`
+  - `scripts/patch_zappa_settings.py`
+  - `tests/test_patch_zappa_settings.py`
+  - `README.md` deployment section when needed
 
-### Tier 4: Full Architecture Review
+  ### Tier 4: Full Architecture Review
 
-Attach `README.md`, `DEPLOYMENT.md`, `OPERATIONS.md`, `FEATURES_DETAILED.md`,
-`CODEBASE_ARCHITECTURE.md`, all workflows, `infra/`, Zappa configuration/patcher,
-Lambda settings/middleware, relevant application services, and tests. Use this
-tier only for an end-to-end audit.
+  Attach `README.md`, `DEPLOYMENT.md`, `OPERATIONS.md`, `FEATURES_DETAILED.md`,
+  `CODEBASE_ARCHITECTURE.md`, all workflows, `infra/`, Zappa configuration/patcher,
+  Lambda settings/middleware, relevant application services, and tests. Use this
+  tier only for an end-to-end audit.
 
-## Short Task Template
+  ## Short Task Template
 
-Append this after the Core Prompt:
+  Append this after the Core Prompt:
 
-```text
-TASK: <one precise outcome>
-SCOPE: <files/component, or "find owning code">
-CONSTRAINTS: <no cloud operations, preserve API, etc.>
-DONE WHEN: <tests/observable result>
-```
+  ```text
+  TASK: <one precise outcome>
+  SCOPE: <files/component, or "find owning code">
+  CONSTRAINTS: <no cloud operations, preserve API, etc.>
+  DONE WHEN: <tests/observable result>
+  ```
 
-Example:
+  Example:
 
-```text
-TASK: Fix public Google Sheet fallback when private credentials are invalid.
-SCOPE: dashboard/services/google_sheet_service.py and focused tests.
-CONSTRAINTS: Preserve private Sheet behavior and financial calculations. No AWS operations.
-DONE WHEN: Focused tests cover private success, public fallback, and safe failure.
-```
+  ```text
+  TASK: Fix public Google Sheet fallback when private credentials are invalid.
+  SCOPE: dashboard/services/google_sheet_service.py and focused tests.
+  CONSTRAINTS: Preserve private Sheet behavior and financial calculations. No AWS operations.
+  DONE WHEN: Focused tests cover private success, public fallback, and safe failure.
+  ```
 
-## Secret Safety
+  ## Secret Safety
 
-Never upload AWS credentials, Terraform state, Google service-account JSON,
-Django secrets, Cloudflare tokens/JWTs, private workbooks, cache contents, or
-real portfolio data to any AI chat.
+  Never upload AWS credentials, Terraform state, Google service-account JSON,
+  Django secrets, Cloudflare tokens/JWTs, private workbooks, cache contents, or
+  real portfolio data to any AI chat.
