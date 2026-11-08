@@ -86,7 +86,7 @@ resource "aws_iam_policy" "apigateway_lambda_invoke" {
 }
 
 resource "aws_iam_role_policy_attachment" "apigateway_lambda_invoke" {
-  role       = "finance-dash-lambda-prod"
+  role       = aws_iam_role.lambda_exec.name
   policy_arn = aws_iam_policy.apigateway_lambda_invoke.arn
 }
 
