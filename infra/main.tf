@@ -68,6 +68,28 @@ data "aws_iam_policy_document" "lambda_logs" {
   }
 }
 
+resource "aws_iam_policy" "apigateway_lambda_invoke" {
+  name        = "finance-dash-apigateway-invoke-prod"
+  description = "Allow API Gateway to invoke the portfolio production Lambda"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "AllowPortfolioLambdaInvoke"
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
+        Resource = "arn:aws:lambda:ap-south-1:875636131680:function:portfolio-production"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "apigateway_lambda_invoke" {
+  role       = "finance-dash-lambda-prod"
+  policy_arn = aws_iam_policy.apigateway_lambda_invoke.arn
+}
+
 resource "aws_iam_policy" "lambda_logs" {
   name   = "${var.project}-lambda-logs-${var.environment}"
   policy = data.aws_iam_policy_document.lambda_logs.json
